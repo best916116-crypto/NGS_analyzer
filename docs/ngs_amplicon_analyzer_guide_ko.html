@@ -3,176 +3,47 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NGS 앰플리콘 Figure 분석기 사용설명서</title>
+  <title>AmpliconScope 사용설명서</title>
   <style>
-    :root {
-      --ink: #1f2933;
-      --muted: #5d6b78;
-      --line: #d8e1ea;
-      --paper: #f7f9fb;
-      --accent: #0f6f9f;
-    }
-
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      background: var(--paper);
-      color: var(--ink);
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-      line-height: 1.65;
-    }
-
-    main {
-      width: min(920px, calc(100% - 32px));
-      margin: 0 auto;
-      padding: 32px 0 48px;
-    }
-
-    .topbar {
-      background: #fff;
-      border-bottom: 1px solid var(--line);
-    }
-
-    .topbar-inner {
-      width: min(920px, calc(100% - 32px));
-      margin: 0 auto;
-      padding: 14px 0;
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      align-items: center;
-    }
-
-    a { color: var(--accent); font-weight: 700; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-
-    h1 {
-      margin: 0 0 8px;
-      font-size: clamp(28px, 5vw, 44px);
-      line-height: 1.15;
-      letter-spacing: 0;
-    }
-
-    h2 {
-      margin: 30px 0 10px;
-      font-size: 22px;
-      letter-spacing: 0;
-    }
-
-    p {
-      margin: 0 0 12px;
-      color: var(--muted);
-    }
-
-    .lead {
-      font-size: 17px;
-      max-width: 780px;
-    }
-
-    .panel {
-      margin-top: 18px;
-      background: #fff;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 18px;
-      box-shadow: 0 8px 22px rgba(28, 45, 62, 0.05);
-    }
-
-    ul, ol {
-      padding-left: 22px;
-      color: var(--muted);
-    }
-
-    li { margin: 6px 0; }
-
-    code {
-      background: #eef3f7;
-      border: 1px solid #dce5ed;
-      border-radius: 5px;
-      padding: 2px 5px;
-      color: #263746;
-    }
-
-    .button {
-      display: inline-flex;
-      min-height: 42px;
-      align-items: center;
-      justify-content: center;
-      border-radius: 8px;
-      background: var(--accent);
-      color: #fff;
-      padding: 0 14px;
-      text-decoration: none;
-    }
-
-    .button:hover { text-decoration: none; background: #0b557a; }
+    :root{--ink:#1f2933;--muted:#5d6b78;--line:#d8e1ea;--paper:#f7f9fb;--accent:#0f6f9f}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;line-height:1.65}.topbar{background:#fff;border-bottom:1px solid var(--line)}.topbar-inner,main{width:min(920px,calc(100% - 32px));margin:0 auto}.topbar-inner{padding:14px 0;display:flex;align-items:center;justify-content:space-between;gap:12px}main{padding:34px 0 52px}a{color:var(--accent);font-weight:800;text-decoration:none}a:hover{text-decoration:underline}h1{margin:0 0 8px;font-size:clamp(28px,5vw,44px);line-height:1.15}h2{margin:30px 0 10px;font-size:22px}p{margin:0 0 12px;color:var(--muted)}.lead{font-size:17px;max-width:760px}.panel{margin-top:18px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:18px;box-shadow:0 8px 22px rgba(28,45,62,.05)}ul,ol{padding-left:22px;color:var(--muted)}li{margin:6px 0}code{background:#eef3f7;border:1px solid #dce5ed;border-radius:5px;padding:2px 5px;color:#263746}.button{display:inline-flex;min-height:42px;align-items:center;justify-content:center;border-radius:8px;background:var(--accent);color:#fff;padding:0 14px}.button:hover{text-decoration:none;background:#0b557a}table{border-collapse:collapse;width:100%;font-size:14px}th,td{border-bottom:1px solid var(--line);padding:9px;text-align:left;vertical-align:top}th{color:#263746;background:#f8fbfd}
   </style>
 </head>
 <body>
-  <div class="topbar">
-    <div class="topbar-inner">
-      <a href="../index.html">AmpliconScope 홈</a>
-      <a class="button" href="../demo/ngs_amplicon_analyzer_ko.html">분석기 열기</a>
-    </div>
-  </div>
-
+  <div class="topbar"><div class="topbar-inner"><a href="../index.html">AmpliconScope</a><a class="button" href="../demo/ngs_amplicon_analyzer_ko.html">분석기 열기</a></div></div>
   <main>
-    <h1>NGS 앰플리콘 Figure 분석기 사용설명서</h1>
-    <p class="lead">
-      서버 없이 브라우저에서만 실행되는 static HTML 앱입니다. Amplicon NGS 변이 CSV를 불러와
-      위치별 변이 히트맵, allele 스펙트럼, QC 표, 검증 체크, figure용 SVG/PNG/CSV/Markdown 리포트를 만듭니다.
-    </p>
+    <h1>AmpliconScope 사용설명서</h1>
+    <p class="lead">Amplicon NGS 결과 CSV를 브라우저에서 불러와 heatmap, allele spectrum, QC table, SVG/PNG/CSV export를 만드는 도구입니다. 파일은 사용자의 브라우저 안에서만 읽습니다.</p>
 
     <section class="panel">
-      <h2>1. 데이터 원칙</h2>
-      <p>파일은 브라우저 메모리에서만 읽습니다. 서버 업로드, API 호출, 외부 전송이 없습니다.</p>
-      <p>raw sequencing file, 개인 실험 CSV, FASTQ, 대용량 결과물은 GitHub에 올리지 마세요.</p>
+      <h2>1. 준비할 파일</h2>
+      <table><thead><tr><th>파일</th><th>필수 여부</th><th>내용</th></tr></thead><tbody><tr><td><code>all_mutation_raw.csv</code></td><td>필수</td><td>reference, read, alignment, read count, ratio, filename이 있는 allele-level table</td></tr><tr><td><code>read_counts.csv</code></td><td>필수</td><td>샘플별 <code>n_aligned_noindel</code>, <code>n_aligned_total</code></td></tr><tr><td><code>summary.nonX_per_pos.mutations.csv</code></td><td>선택</td><td>위치별 mutation count table</td></tr><tr><td><code>sample_sheet.csv</code></td><td>선택</td><td>샘플명, target, condition, annotation 정보</td></tr></tbody></table>
     </section>
 
     <section class="panel">
-      <h2>2. 필수 입력 파일</h2>
-      <ul>
-        <li><code>all_mutation_raw.csv</code>: <code>ref</code>, <code>alignment</code>, <code>read</code>, <code>n_reads</code>, <code>ratio</code>, <code>filename</code></li>
-        <li><code>read_counts.csv</code>: <code>filename</code>, <code>n_aligned_noindel</code>, <code>n_aligned_total</code></li>
-      </ul>
-      <p>선택 파일로 <code>summary.nonX_per_pos.mutations.csv</code>, <code>summary.mutations.csv</code>, <code>sample_sheet.csv</code>를 추가할 수 있습니다.</p>
+      <h2>2. 기본 사용 순서</h2>
+      <ol><li>분석기를 엽니다.</li><li>CSV 파일을 드래그하거나 <strong>파일 선택</strong> 버튼으로 불러옵니다.</li><li>샘플 수, positions, max mutation %, median reads를 확인합니다.</li><li><strong>계산 기준 reads</strong>, target positions, minimum reads, figure layout을 조정합니다.</li><li>Allele spectrum과 QC table을 확인합니다.</li><li>필요한 형식으로 SVG, PNG, CSV, Figure Report를 저장합니다.</li></ol>
     </section>
 
     <section class="panel">
-      <h2>3. 기본 사용 흐름</h2>
-      <ol>
-        <li><a href="../demo/ngs_amplicon_analyzer_ko.html">분석기</a>를 엽니다.</li>
-        <li>처음에는 <strong>합성 데모 불러오기</strong>로 화면 구성을 확인합니다.</li>
-        <li>실제 분석 시 <code>all_mutation_raw.csv</code>와 <code>read_counts.csv</code>를 드래그하거나 파일 선택으로 불러옵니다.</li>
-        <li>가능하면 <code>summary.nonX_per_pos.mutations.csv</code>도 함께 불러와 위치별 count 검증을 켭니다.</li>
-        <li>샘플명이 어렵다면 샘플시트 템플릿을 내려받아 metadata를 채운 뒤 업로드합니다.</li>
-        <li>지표, 분모, 행 표시, 행 정렬, 배경값, 최소 depth를 조정합니다.</li>
-        <li>QC 배지와 검증 체크 탭을 확인한 뒤 내보냅니다.</li>
-      </ol>
+      <h2>3. 계산 기준 reads</h2>
+      <p>mutation %를 계산할 때 어떤 read count로 나눌지 정하는 옵션입니다.</p>
+      <ul><li><strong>Indel 제외 정렬 reads</strong>: <code>n_aligned_noindel</code>을 기준으로 계산합니다.</li><li><strong>전체 정렬 reads</strong>: <code>n_aligned_total</code>을 기준으로 계산합니다.</li></ul>
+      <p>기본값은 <code>n_aligned_noindel</code>입니다. 좌표는 1-based amplicon position으로 표시됩니다.</p>
     </section>
 
     <section class="panel">
-      <h2>4. 주요 설정</h2>
-      <ul>
-        <li><strong>지표</strong>: 전체 변이 또는 특정 base conversion을 선택합니다.</li>
-        <li><strong>분모</strong>: 기본은 no-indel 정렬 read이며, total aligned read도 선택할 수 있습니다.</li>
-        <li><strong>행 표시</strong>: 개별 샘플, 조건 평균 +/- SD, 조건 중앙값을 선택합니다.</li>
-        <li><strong>배경값</strong>: 대조군 중앙값 차감은 control group을 확인한 뒤 사용합니다.</li>
-      </ul>
-      <p>논문용 figure와 export report의 scientific labels는 영어로 표시됩니다. 예: <code>Intended edits</code>, <code>Target positions</code>, <code>mutation percentage</code>.</p>
+      <h2>4. Figure layout</h2>
+      <ul><li><strong>Compact panels (auto)</strong>: 샘플이 많으면 여러 패널로 나누어 더 짧은 heatmap을 만듭니다.</li><li><strong>Single long heatmap</strong>: 모든 샘플을 하나의 긴 heatmap으로 표시합니다.</li></ul>
     </section>
 
     <section class="panel">
       <h2>5. 내보내기</h2>
-      <ul>
-        <li><strong>Figure SVG</strong>: 히트맵과 선택 샘플 allele 스펙트럼을 하나의 SVG로 저장합니다.</li>
-        <li><strong>SVG</strong>: 현재 히트맵만 저장합니다.</li>
-        <li><strong>멀티패널 SVG</strong>: 타깃별 패널을 세로로 쌓은 SVG를 저장합니다.</li>
-        <li><strong>PNG</strong>: 빠른 미리보기용 이미지입니다.</li>
-        <li><strong>Heatmap/Allele/QC CSV</strong>: 후속 분석이나 그래프 재작성에 사용합니다.</li>
-        <li><strong>Figure Report</strong>: 설정, QC, 표시 행, allele, methods 문구를 Markdown으로 저장합니다.</li>
-      </ul>
+      <ul><li><strong>Figure SVG</strong>: 벡터 형식 heatmap을 저장합니다.</li><li><strong>Figure PNG</strong>: 이미지 형식 heatmap을 저장합니다.</li><li><strong>Heatmap CSV</strong>: 위치별 mutation % table을 저장합니다.</li><li><strong>Figure Report</strong>: 사용한 설정과 요약값을 Markdown으로 저장합니다.</li></ul>
+    </section>
+
+    <section class="panel">
+      <h2>6. 데이터 보호</h2>
+      <p>이 앱은 정적 HTML 파일입니다. 로그인, 서버 업로드, 데이터베이스 저장 과정이 없습니다. 개인 실험 데이터나 raw sequencing file은 GitHub repository에 올리지 말고 브라우저에서 직접 불러오세요.</p>
     </section>
   </main>
 </body>
