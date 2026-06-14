@@ -12,7 +12,7 @@
   <div class="topbar"><div class="topbar-inner"><a href="../index.html">AmpliconScope</a><a class="button" href="../demo/ngs_amplicon_analyzer_ko.html">분석기 열기</a></div></div>
   <main>
     <h1>AmpliconScope 사용설명서</h1>
-    <p class="lead">Amplicon NGS 결과 CSV를 브라우저에서 불러와 heatmap, allele spectrum, QC table, SVG/PNG/CSV export를 만드는 도구입니다. 파일은 사용자의 브라우저 안에서만 읽습니다.</p>
+    <p class="lead">Amplicon NGS 결과 CSV를 브라우저에서 불러와 heatmap, allele spectrum, QC 요약, SVG/PNG/CSV export를 만드는 도구입니다. 파일은 사용자의 브라우저 안에서만 읽습니다.</p>
 
     <section class="panel">
       <h2>1. 준비할 파일</h2>
@@ -21,28 +21,35 @@
 
     <section class="panel">
       <h2>2. 기본 사용 순서</h2>
-      <ol><li>분석기를 엽니다.</li><li>CSV 파일을 드래그하거나 <strong>파일 선택</strong> 버튼으로 불러옵니다.</li><li>샘플 수, positions, max mutation %, median reads를 확인합니다.</li><li><strong>계산 기준 reads</strong>, target positions, minimum reads, figure layout을 조정합니다.</li><li>Allele spectrum과 QC table을 확인합니다.</li><li>필요한 형식으로 SVG, PNG, CSV, Figure Report를 저장합니다.</li></ol>
+      <ol><li>분석기를 엽니다.</li><li>CSV 파일을 드래그하거나 <strong>파일 선택</strong> 버튼으로 불러옵니다.</li><li>샘플 수, positions, max mutation %, median reads를 확인합니다.</li><li><strong>계산 기준 reads</strong>, target positions, minimum reads, figure layout을 조정합니다.</li><li>필요하면 <strong>Samples</strong> 탭에서 figure에 표시될 sample 이름을 수정합니다.</li><li>Allele spectrum과 heatmap data를 확인합니다.</li><li>필요한 형식으로 SVG, PNG, CSV, Figure Report를 저장합니다.</li></ol>
     </section>
 
     <section class="panel">
-      <h2>3. 계산 기준 reads</h2>
+      <h2>3. Sample 이름 수정</h2>
+      <p><strong>Samples</strong> 탭에서 각 sample의 표시 이름을 직접 입력할 수 있습니다. 이 기능은 figure와 export table에 표시되는 label만 바꾸며, 원본 CSV 파일은 수정하지 않습니다.</p>
+      <ul><li><strong>view</strong> 버튼을 누르면 해당 sample의 allele spectrum을 볼 수 있습니다.</li><li><strong>라벨 초기화</strong> 버튼을 누르면 앱에서 입력한 sample 이름을 모두 되돌립니다.</li><li><code>sample_sheet.csv</code>가 있으면 기본 label로 사용할 수 있고, 앱 안에서 다시 고칠 수 있습니다.</li></ul>
+    </section>
+
+    <section class="panel">
+      <h2>4. 계산 기준 reads</h2>
       <p>mutation %를 계산할 때 어떤 read count로 나눌지 정하는 옵션입니다.</p>
       <ul><li><strong>Indel 제외 정렬 reads</strong>: <code>n_aligned_noindel</code>을 기준으로 계산합니다.</li><li><strong>전체 정렬 reads</strong>: <code>n_aligned_total</code>을 기준으로 계산합니다.</li></ul>
       <p>기본값은 <code>n_aligned_noindel</code>입니다. 좌표는 1-based amplicon position으로 표시됩니다.</p>
     </section>
 
     <section class="panel">
-      <h2>4. Figure layout</h2>
+      <h2>5. Figure layout</h2>
       <ul><li><strong>Compact panels (auto)</strong>: 샘플이 많으면 여러 패널로 나누어 더 짧은 heatmap을 만듭니다.</li><li><strong>Single long heatmap</strong>: 모든 샘플을 하나의 긴 heatmap으로 표시합니다.</li></ul>
+      <p>Figure export에는 제목과 부제목을 넣지 않습니다. 앱에서 설정한 sample label, position tick, mutation percentage legend만 SVG/PNG에 포함됩니다.</p>
     </section>
 
     <section class="panel">
-      <h2>5. 내보내기</h2>
+      <h2>6. 내보내기</h2>
       <ul><li><strong>Figure SVG</strong>: 벡터 형식 heatmap을 저장합니다.</li><li><strong>Figure PNG</strong>: 이미지 형식 heatmap을 저장합니다.</li><li><strong>Heatmap CSV</strong>: 위치별 mutation % table을 저장합니다.</li><li><strong>Figure Report</strong>: 사용한 설정과 요약값을 Markdown으로 저장합니다.</li></ul>
     </section>
 
     <section class="panel">
-      <h2>6. 데이터 보호</h2>
+      <h2>7. 데이터 보호</h2>
       <p>이 앱은 정적 HTML 파일입니다. 로그인, 서버 업로드, 데이터베이스 저장 과정이 없습니다. 개인 실험 데이터나 raw sequencing file은 GitHub repository에 올리지 말고 브라우저에서 직접 불러오세요.</p>
     </section>
   </main>
