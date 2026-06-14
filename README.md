@@ -16,6 +16,7 @@ The app runs in the browser. CSV files are read locally on your device and are n
 - Review read depth and basic QC checks
 - View a mutation heatmap across amplicon positions
 - Inspect allele-level reads for each sample
+- Edit displayed sample labels in the app without changing CSV files
 - Export SVG, PNG, CSV, and Markdown summary files
 - Use compact multi-panel heatmaps when many samples are loaded
 
@@ -68,17 +69,16 @@ The position columns are parsed as reference-base plus 1-based position, such as
    - `Indel 제외 정렬 reads`: uses `n_aligned_noindel`
    - `전체 정렬 reads`: uses `n_aligned_total`
 6. Set target positions, minimum reads, and figure layout.
-7. Export the figure or tables you need.
+7. Open the `Samples` tab if the displayed sample names need to be changed.
+8. Export the figure or tables you need.
 
 ## Outputs
 
 | Output | Use |
 | --- | --- |
-| `Figure SVG` | Editable vector figure |
-| `Figure PNG` | Quick image export |
+| `Figure SVG` | Editable vector heatmap |
+| `Figure PNG` | Image export of the current heatmap |
 | `Heatmap CSV` | Position-level percentages for downstream plotting |
-| `Allele CSV` | Selected sample allele rows |
-| `QC CSV` | Read count and QC summary |
 | `Figure Report` | Markdown record of settings and summary values |
 
 ## Calculation Notes
