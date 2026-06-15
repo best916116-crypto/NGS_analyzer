@@ -1,0 +1,2 @@
+"sample","label","files","estimated_records","parsed_records","passed_reads","aligned_reads","low_identity_reads","no_indel_reads","edited_reads","unique_reads","mean_quality","mean_identity","dropped_short","dropped_quality","dropped_n","malformed_records","read_limit_reached","warnings"
+"emx1_base_editor","emx1_base_editor","base_editor.fastq.gz","25000","25000","25000","24976","24","24739","8787","3915","37.28732769996042","0.9967775260085673","0","0","0","0","false","low-identity reads excluded"

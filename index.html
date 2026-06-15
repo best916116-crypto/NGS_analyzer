@@ -1,34 +1,3324 @@
 <!doctype html>
-<html lang="ko">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AmpliconScope NGS Analyzer</title>
+  <title>Amplicon Analyzer</title>
   <style>
-    :root{--ink:#17212b;--muted:#627180;--line:#d8e1ea;--paper:#f6f8fb;--panel:#fff;--accent:#0f6f9f;--accent-dark:#0b557a;--target:#b42318;--heat-1:#d7e9fb;--heat-2:#8fc4ee;--heat-3:#3a8ac6;--heat-4:#0f4c81}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:linear-gradient(180deg,#fff 0%,var(--paper) 72%),var(--paper);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;line-height:1.5}a{color:inherit;text-decoration:none}.page{width:min(1080px,calc(100% - 32px));min-height:100vh;margin:0 auto;display:grid;grid-template-rows:auto 1fr auto}header,footer{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:22px 0;color:var(--muted);font-size:13px}.brand{display:flex;align-items:center;gap:11px;color:var(--ink);font-weight:850}.mark{width:36px;height:36px;border-radius:8px;display:grid;place-items:center;background:var(--accent);color:#fff;letter-spacing:0}main{display:grid;grid-template-columns:minmax(0,.95fr) minmax(320px,.75fr);gap:28px;align-items:center;padding:26px 0 54px}h1{margin:0;max-width:760px;font-size:clamp(38px,7vw,74px);line-height:1.02;letter-spacing:0}.lead{margin:22px 0 0;max-width:600px;color:var(--muted);font-size:18px}.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:30px}.button{min-height:44px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:8px;padding:0 16px;background:#fff;font-weight:850}.button.primary{background:var(--accent);border-color:var(--accent);color:#fff}.button.primary:hover{background:var(--accent-dark)}.button:hover{border-color:#a8bac7}.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 16px 40px rgba(27,47,65,.08);padding:18px}.mini-title{display:flex;justify-content:space-between;gap:12px;margin-bottom:15px;color:var(--muted);font-size:12px;font-weight:800}.mini-figure{display:grid;gap:5px;padding:14px;border:1px solid var(--line);border-radius:8px;background:#fbfdff}.mini-row{display:grid;grid-template-columns:58px repeat(12,1fr) 46px;gap:2px;align-items:center;font-size:10px;color:var(--muted)}.cell{height:12px;border-radius:2px;background:#f3f8fd;border:1px solid #fff}.hot1{background:var(--heat-1)}.hot2{background:var(--heat-2)}.hot3{background:var(--heat-3)}.hot4{background:var(--heat-4)}.target{outline:1.5px solid var(--target);outline-offset:-1.5px}.files{display:grid;gap:8px;margin-top:16px}.file{display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--line);padding-top:9px;font-size:13px}.file span{color:var(--muted)}.file strong{text-align:right}.privacy{margin-top:14px;color:var(--muted);font-size:13px}@media(max-width:820px){main{grid-template-columns:1fr;align-items:start}h1{font-size:clamp(36px,12vw,58px)}header,footer{align-items:flex-start;flex-direction:column}}
+    :root {
+      --ink: #18212b;
+      --muted: #5d6b78;
+      --subtle: #7a8794;
+      --line: #d8e1ea;
+      --soft-line: #e9eef3;
+      --paper: #f6f8fb;
+      --panel: #ffffff;
+      --accent: #0f6f8f;
+      --accent-strong: #0a5570;
+      --cyan: #158f9c;
+      --green: #20815f;
+      --amber: #aa6b00;
+      --red: #b42318;
+      --violet: #6c4ab6;
+      --blue: #2468b3;
+      --heat-0: #f8fbff;
+      --heat-1: #d7e9fb;
+      --heat-2: #8fc4ee;
+      --heat-3: #3a8ac6;
+      --heat-4: #0f4c81;
+      --shadow: 0 14px 32px rgba(24, 33, 43, .08);
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html { min-width: 320px; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      line-height: 1.45;
+    }
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: .58; }
+    a { color: var(--accent); text-decoration: none; font-weight: 800; }
+    a:hover { text-decoration: underline; }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: rgba(255, 255, 255, .94);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(10px);
+    }
+    .topbar-inner {
+      width: min(1480px, calc(100% - 28px));
+      min-height: 62px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+    .mark {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 900;
+      letter-spacing: 0;
+      flex: 0 0 auto;
+    }
+    .brand h1 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+    .brand p {
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .top-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .privacy-chip {
+      border: 1px solid #bfe1e6;
+      color: #0b6070;
+      background: #edf9fb;
+      border-radius: 8px;
+      padding: 7px 10px;
+      font-size: 12px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    .app {
+      width: min(1480px, calc(100% - 28px));
+      margin: 0 auto;
+      padding: 16px 0 30px;
+    }
+    .workflow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(130px, 1fr));
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .step {
+      min-height: 54px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 9px 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .step b {
+      width: 24px;
+      height: 24px;
+      border-radius: 8px;
+      background: #eef3f7;
+      color: #354655;
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      flex: 0 0 auto;
+    }
+    .step span {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 760;
+    }
+    .step strong {
+      display: block;
+      color: var(--ink);
+      font-size: 13px;
+      line-height: 1.15;
+    }
+    .step.active {
+      border-color: #93c9d4;
+      box-shadow: 0 0 0 2px #dff1f4 inset;
+    }
+    .step.active b {
+      background: var(--accent);
+      color: #fff;
+    }
+    .step.done b {
+      background: #dff4ec;
+      color: var(--green);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 352px minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+    }
+    .sidebar {
+      display: grid;
+      gap: 12px;
+    }
+    .panel, .result-panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+    .panel {
+      padding: 14px;
+    }
+    .panel-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .panel h2, .result-panel h2 {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+    .panel p, .result-panel p {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      border-radius: 8px;
+      padding: 0 8px;
+      background: #eef3f7;
+      color: #425466;
+      font-size: 11px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+    .badge.good { background: #e7f5ef; color: var(--green); }
+    .badge.warn { background: #fff4df; color: var(--amber); }
+    .badge.bad { background: #fdebea; color: var(--red); }
+    .badge.info { background: #e9f5fb; color: var(--blue); }
+
+    .field {
+      display: grid;
+      gap: 5px;
+      margin: 10px 0;
+    }
+    .field label {
+      font-size: 12px;
+      color: #405160;
+      font-weight: 850;
+    }
+    .field input, .field select, .field textarea {
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--ink);
+      padding: 8px 10px;
+      outline: none;
+    }
+    .field textarea {
+      min-height: 112px;
+      resize: vertical;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .field textarea.compact {
+      min-height: 86px;
+    }
+    .field input:focus, .field select:focus, .field textarea:focus {
+      border-color: #89bfd0;
+      box-shadow: 0 0 0 2px #dceff4;
+    }
+    .inline-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .check-field {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin: 8px 0;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .check-field input {
+      margin-top: 3px;
+      flex: 0 0 auto;
+    }
+    .hint {
+      color: var(--muted);
+      font-size: 12px;
+      margin: 7px 0 0;
+    }
+    .preflight-grid {
+      display: grid;
+      gap: 8px;
+    }
+    .preflight-row {
+      border: 1px solid var(--soft-line);
+      border-radius: 8px;
+      background: #fbfdff;
+      padding: 8px 10px;
+    }
+    .preflight-row span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 850;
+    }
+    .preflight-row strong {
+      display: block;
+      margin-top: 2px;
+      font-size: 13px;
+      word-break: break-word;
+    }
+    .warning-list {
+      margin: 8px 0 0;
+      padding-left: 18px;
+      color: var(--amber);
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .drop {
+      border: 1.5px dashed #9fb3c3;
+      border-radius: 8px;
+      min-height: 112px;
+      padding: 16px 14px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      background: #f8fbfd;
+      color: var(--muted);
+    }
+    .drop.drag {
+      border-color: var(--accent);
+      background: #eef8fb;
+    }
+    .drop strong {
+      display: block;
+      color: var(--ink);
+      font-size: 15px;
+      margin-bottom: 4px;
+    }
+    .file-input {
+      display: none;
+    }
+    .file-list {
+      display: grid;
+      gap: 7px;
+      margin-top: 10px;
+      max-height: 210px;
+      overflow: auto;
+    }
+    .file-row {
+      border: 1px solid var(--soft-line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 8px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: start;
+    }
+    .file-row strong {
+      display: block;
+      font-size: 12px;
+      word-break: break-all;
+    }
+    .file-row span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      margin-top: 2px;
+    }
+    .remove-file {
+      width: 28px;
+      height: 28px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--red);
+      font-weight: 900;
+    }
+
+    .btns {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .btn {
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--ink);
+      padding: 0 12px;
+      font-weight: 850;
+      font-size: 13px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      text-align: center;
+    }
+    .btn:hover { border-color: #9fb3c3; }
+    .btn.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .btn.primary:hover {
+      background: var(--accent-strong);
+      border-color: var(--accent-strong);
+    }
+    .btn.green {
+      background: var(--green);
+      border-color: var(--green);
+      color: #fff;
+    }
+    .btn.danger {
+      color: var(--red);
+      border-color: #f0c1bd;
+      background: #fff8f7;
+    }
+    .btn.full {
+      width: 100%;
+    }
+    .site-select {
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--ink);
+      padding: 0 10px;
+      font-weight: 800;
+      max-width: 240px;
+    }
+    .site-picker {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .content {
+      display: grid;
+      gap: 14px;
+      min-width: 0;
+    }
+    .run-summary {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(130px, 1fr));
+      gap: 10px;
+    }
+    .metric {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 13px;
+      min-height: 86px;
+      box-shadow: var(--shadow);
+    }
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 850;
+    }
+    .metric strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 26px;
+      line-height: 1.05;
+    }
+    .metric small {
+      display: block;
+      color: var(--subtle);
+      font-size: 11px;
+      margin-top: 5px;
+    }
+
+    .result-panel {
+      min-width: 0;
+      overflow: hidden;
+    }
+    .result-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 14px 10px;
+      border-bottom: 1px solid var(--soft-line);
+    }
+    .figure-wrap {
+      min-height: 468px;
+      overflow: auto;
+      background: #fff;
+      display: grid;
+      place-items: center;
+      padding: 12px;
+    }
+    .figure-wrap svg {
+      max-width: 100%;
+      height: auto;
+      display: block;
+    }
+    .empty {
+      width: min(640px, 100%);
+      text-align: center;
+      color: var(--muted);
+      padding: 40px 18px;
+    }
+    .empty strong {
+      display: block;
+      color: var(--ink);
+      font-size: 18px;
+      margin-bottom: 7px;
+    }
+    .empty p {
+      margin: 0 auto;
+      max-width: 520px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      padding: 12px 14px 0;
+      border-top: 1px solid var(--soft-line);
+    }
+    .tab {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: #405160;
+      border-radius: 8px;
+      min-height: 34px;
+      padding: 0 10px;
+      font-size: 12px;
+      font-weight: 900;
+    }
+    .tab.active {
+      background: #e7f4f7;
+      border-color: #a7d0d9;
+      color: #0b6070;
+    }
+    .tab-body {
+      padding: 12px 14px 14px;
+      min-height: 240px;
+    }
+    .table-scroll {
+      overflow: auto;
+      border: 1px solid var(--soft-line);
+      border-radius: 8px;
+      max-height: 520px;
+      background: #fff;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    th, td {
+      padding: 8px 9px;
+      border-bottom: 1px solid var(--soft-line);
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      position: sticky;
+      top: 0;
+      background: #f8fbfd;
+      color: #405160;
+      z-index: 1;
+      font-weight: 900;
+    }
+    tr:last-child td { border-bottom: 0; }
+    .mono {
+      font-family: var(--mono);
+      font-size: 11px;
+      word-break: break-all;
+    }
+    .bar {
+      width: 90px;
+      height: 8px;
+      border-radius: 99px;
+      background: #e6edf3;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+    .bar i {
+      display: block;
+      height: 100%;
+      background: var(--accent);
+    }
+    .quality-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(160px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .mini {
+      border: 1px solid var(--soft-line);
+      border-radius: 8px;
+      padding: 10px;
+      background: #fbfdff;
+    }
+    .mini span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 850;
+    }
+    .mini strong {
+      display: block;
+      font-size: 18px;
+      margin-top: 3px;
+    }
+    .sample-list {
+      display: grid;
+      gap: 8px;
+    }
+    .sample-editor {
+      border: 1px solid var(--soft-line);
+      border-radius: 8px;
+      padding: 8px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+      gap: 10px;
+      align-items: center;
+      background: #fff;
+    }
+    .sample-editor strong {
+      display: block;
+      font-size: 12px;
+      word-break: break-all;
+    }
+    .sample-editor small {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      margin-top: 3px;
+    }
+    .sample-editor input {
+      width: 100%;
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0 9px;
+    }
+    .log {
+      display: grid;
+      gap: 6px;
+      max-height: 170px;
+      overflow: auto;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .log-row {
+      border-left: 3px solid #c8d5df;
+      padding-left: 8px;
+    }
+    .log-row.ok { border-color: var(--green); }
+    .log-row.warn { border-color: var(--amber); }
+    .log-row.bad { border-color: var(--red); }
+    .progress {
+      height: 8px;
+      border-radius: 99px;
+      background: #e7edf3;
+      overflow: hidden;
+      margin: 8px 0 2px;
+    }
+    .progress i {
+      display: block;
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--cyan));
+      transition: width .18s ease;
+    }
+    .export-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(140px, 1fr));
+      gap: 8px;
+    }
+
+    @media (max-width: 1180px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .run-summary { grid-template-columns: repeat(3, minmax(130px, 1fr)); }
+    }
+    @media (max-width: 760px) {
+      .topbar-inner { align-items: flex-start; flex-direction: column; padding: 10px 0; }
+      .workflow { grid-template-columns: 1fr; }
+      .sidebar { grid-template-columns: 1fr; }
+      .run-summary, .quality-grid, .export-grid { grid-template-columns: 1fr; }
+      .inline-grid { grid-template-columns: 1fr; }
+      .result-head { display: block; }
+      .result-head .btns { margin-top: 10px; }
+      .sample-editor { grid-template-columns: 1fr; }
+      .metric strong { font-size: 22px; }
+    }
   </style>
 </head>
 <body>
-  <div class="page">
-    <header><div class="brand"><div class="mark">NGS</div><span>AmpliconScope</span></div><span>Browser-only analysis</span></header>
-    <main>
-      <section>
-        <h1>Amplicon NGS를 바로 figure로.</h1>
-        <p class="lead">전처리된 CSV를 넣으면 mutation heatmap, allele spectrum, QC table, SVG/PNG export를 브라우저에서 바로 만듭니다.</p>
-        <div class="actions"><a class="button primary" href="demo/ngs_amplicon_analyzer_ko.html">분석기 열기</a><a class="button" href="docs/ngs_amplicon_analyzer_guide_ko.html">사용설명서</a></div>
-      </section>
-      <section class="panel" aria-label="App preview and required files">
-        <div class="mini-title"><span>Heatmap preview</span><span>SVG / PNG</span></div>
-        <div class="mini-figure" aria-hidden="true">
-          <div class="mini-row"><span>sample 1</span><i class="cell"></i><i class="cell"></i><i class="cell hot1"></i><i class="cell hot3 target"></i><i class="cell hot4"></i><i class="cell hot2"></i><i class="cell"></i><i class="cell hot1 target"></i><i class="cell hot2"></i><i class="cell"></i><i class="cell"></i><i class="cell"></i><span>56%</span></div>
-          <div class="mini-row"><span>sample 2</span><i class="cell"></i><i class="cell hot1"></i><i class="cell"></i><i class="cell hot2 target"></i><i class="cell hot3"></i><i class="cell hot1"></i><i class="cell"></i><i class="cell hot2 target"></i><i class="cell hot1"></i><i class="cell"></i><i class="cell"></i><i class="cell"></i><span>44%</span></div>
-          <div class="mini-row"><span>control</span><i class="cell"></i><i class="cell"></i><i class="cell"></i><i class="cell hot1 target"></i><i class="cell"></i><i class="cell"></i><i class="cell"></i><i class="cell hot1 target"></i><i class="cell"></i><i class="cell"></i><i class="cell"></i><i class="cell"></i><span>2%</span></div>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="mark">AA</div>
+        <div>
+          <h1>Amplicon Analyzer</h1>
+          <p>Browser-based amplicon sequencing QC, editing calls, and report-ready figures</p>
         </div>
-        <div class="files"><div class="file"><span>필수</span><strong>all_mutation_raw.csv</strong></div><div class="file"><span>필수</span><strong>read_counts.csv</strong></div><div class="file"><span>선택</span><strong>summary / sample sheet</strong></div></div>
-        <p class="privacy">파일은 브라우저 안에서만 읽습니다. 서버 업로드와 로그인은 없습니다.</p>
-      </section>
-    </main>
-    <footer><span>Use local CSV files directly in the browser.</span><span>No install. No account.</span></footer>
+      </div>
+      <div class="top-actions">
+        <span class="privacy-chip">Public benchmark included</span>
+        <span class="privacy-chip">Beta: validate final calls</span>
+        <a class="btn" href="docs/user_guide.html">User guide</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="app">
+    <nav class="workflow" aria-label="Analysis workflow">
+      <div class="step active" data-step="setup"><b>1</b><span><strong>Setup</strong>Reference and target window</span></div>
+      <div class="step" data-step="upload"><b>2</b><span><strong>Upload</strong>Add FASTQ / FASTQ.GZ</span></div>
+      <div class="step" data-step="process"><b>3</b><span><strong>Run</strong>QC, alignment, calling</span></div>
+      <div class="step" data-step="results"><b>4</b><span><strong>Results</strong>Review QC and figures</span></div>
+      <div class="step" data-step="export"><b>5</b><span><strong>Export</strong>Save CSV, SVG, PNG</span></div>
+    </nav>
+
+    <div class="layout">
+      <aside class="sidebar">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Run setup</h2>
+              <p>Start with defaults, then tune assay-specific settings as needed.</p>
+            </div>
+            <span class="badge info">single or multi-site</span>
+          </div>
+          <div class="field">
+            <label for="runName">Run name</label>
+            <input id="runName" value="Amplicon analysis run">
+          </div>
+          <div class="field">
+            <label for="referenceSeq">Reference amplicon sequence</label>
+            <textarea id="referenceSeq" spellcheck="false"></textarea>
+            <p class="hint">Use A/C/G/T/N bases. Reads are evaluated in forward and reverse-complement orientations.</p>
+          </div>
+          <div class="field">
+            <label for="assayType">Assay type</label>
+            <select id="assayType">
+              <option value="custom">Custom window</option>
+              <option value="cas">Cas / CRISPR</option>
+              <option value="tale">TALE / TALEN</option>
+            </select>
+            <p class="hint">The reference is the full expected PCR amplicon. The targeting window is the highlighted region within that reference.</p>
+          </div>
+          <div id="assayFields"></div>
+          <div class="inline-grid">
+            <div class="field">
+              <label for="targets">Target positions, 1-based amplicon coordinates</label>
+              <input id="targets" value="16,19" placeholder="e.g. 16,19 or 16-23">
+            </div>
+            <div class="field">
+              <label for="minDepth">Low-depth warning threshold</label>
+              <input id="minDepth" type="number" min="0" step="1" value="100">
+            </div>
+          </div>
+          <div class="field">
+            <label for="siteManifest">Additional sites (optional)</label>
+            <textarea id="siteManifest" class="compact" spellcheck="false" placeholder="site_B, ACGT..., 16-23&#10;site_C, ACGT..., 12,18,22"></textarea>
+            <p class="hint">Rows use: site name, reference amplicon, target positions. Additional sites use custom target positions.</p>
+          </div>
+          <div class="btns">
+            <button class="btn" id="demoBtn" type="button">Load demo data</button>
+            <button class="btn" id="publicBenchmarkBtn" type="button">Load public benchmark</button>
+            <button class="btn" id="clearBtn" type="button">Reset</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>FASTQ files</h2>
+              <p>R1/R2 files are grouped by inferred sample name.</p>
+            </div>
+            <span class="badge" id="fileBadge">0 files</span>
+          </div>
+          <div id="drop" class="drop" role="button" tabindex="0">
+            <div>
+              <strong>Drop FASTQ files here</strong>
+              <span>Supports .fastq, .fq, .fastq.gz, and .fq.gz</span>
+            </div>
+          </div>
+          <input id="fileInput" class="file-input" type="file" multiple accept=".fastq,.fq,.gz,.txt">
+          <div class="btns" style="margin-top:10px">
+            <button class="btn primary" id="pickBtn" type="button">Choose files</button>
+          </div>
+          <div id="fileList" class="file-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Processing</h2>
+              <p>For large files, validate the run with a modest read limit before scaling up.</p>
+            </div>
+            <span class="badge" id="runBadge">ready</span>
+          </div>
+          <div class="inline-grid">
+            <div class="field">
+              <label for="minQ">Minimum mean Q</label>
+              <input id="minQ" type="number" min="0" max="45" step="1" value="20">
+            </div>
+            <div class="field">
+              <label for="minLen">Minimum read length</label>
+              <input id="minLen" type="number" min="1" step="1" value="30">
+            </div>
+          </div>
+          <div class="inline-grid">
+            <div class="field">
+              <label for="readLimit">Read limit per sample</label>
+              <input id="readLimit" type="number" min="100" step="100" value="50000">
+            </div>
+            <div class="field">
+              <label for="minIdentity">Minimum alignment identity (%)</label>
+              <input id="minIdentity" type="number" min="0" max="100" step="0.1" value="80">
+              <p class="hint">Reads below this identity are excluded from mutation calling.</p>
+            </div>
+          </div>
+          <div class="field">
+            <label for="signalMode">Edit signal shown in heatmap</label>
+            <select id="signalMode">
+              <option value="all">Substitution + indel edit rate</option>
+              <option value="substitution">Substitution only</option>
+              <option value="indel">Indel only</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="expectedEdit">Expected base edit</label>
+            <select id="expectedEdit">
+              <option value="">None / not specified</option>
+              <option value="C>T">C&gt;T cytosine base edit</option>
+              <option value="G>A">G&gt;A cytosine base edit, opposite strand</option>
+              <option value="A>G">A&gt;G adenine base edit</option>
+              <option value="T>C">T&gt;C adenine base edit, opposite strand</option>
+              <option value="C>G">C&gt;G transversion</option>
+              <option value="C>A">C&gt;A transversion</option>
+              <option value="A>C">A&gt;C transversion</option>
+              <option value="A>T">A&gt;T transversion</option>
+            </select>
+            <p class="hint">Used for expected-edit summaries and exports; it does not change alignment.</p>
+          </div>
+          <label class="check-field"><input id="dropN" type="checkbox" checked> Exclude reads containing N bases</label>
+          <div class="progress" aria-hidden="true"><i id="progressBar"></i></div>
+          <p class="hint" id="progressText">Add FASTQ files, then run the analysis.</p>
+          <div class="btns" style="margin-top:10px">
+            <button class="btn primary full" id="runBtn" type="button">Run analysis</button>
+            <button class="btn danger full" id="cancelBtn" type="button" disabled>Cancel</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Preflight</h2>
+              <p>Review inferred setup before running the analysis.</p>
+            </div>
+            <span class="badge" id="preflightBadge">needs files</span>
+          </div>
+          <div id="preflightBody"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Export</h2>
+              <p>Figure exports use the displayed site; CSV exports include all sites.</p>
+            </div>
+            <span class="badge" id="exportBadge">waiting</span>
+          </div>
+          <div class="btns">
+            <button class="btn green" id="svgBtn" type="button">Figure SVG</button>
+            <button class="btn green" id="pngBtn" type="button">Figure PNG</button>
+            <button class="btn" id="mutationCsvBtn" type="button">Position-level CSV</button>
+            <button class="btn" id="alleleCsvBtn" type="button">Allele-spectrum CSV</button>
+            <button class="btn" id="qcCsvBtn" type="button">QC CSV</button>
+            <button class="btn" id="reportBtn" type="button">Methods + QC report</button>
+            <button class="btn" id="htmlReportBtn" type="button">HTML report</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Run log</h2>
+              <p>Processing status and recoverable warnings appear here.</p>
+            </div>
+          </div>
+          <div id="log" class="log"></div>
+        </section>
+      </aside>
+
+      <main class="content">
+        <section class="run-summary" aria-label="Run summary">
+          <div class="metric"><span>Samples</span><strong id="metricSamples">0</strong><small id="metricSamplesHint">FASTQ sample groups</small></div>
+          <div class="metric"><span>Alignment-passed reads</span><strong id="metricPassed">0</strong><small>Reads passing identity threshold</small></div>
+          <div class="metric"><span>Median depth</span><strong id="metricDepth">0</strong><small>Alignment-passed reads per sample</small></div>
+          <div class="metric"><span>Max edit %</span><strong id="metricMax">0.0</strong><small>selected signal</small></div>
+          <div class="metric"><span>Warnings</span><strong id="metricWarn">0</strong><small>QC / alignment warnings</small></div>
+        </section>
+
+        <section class="result-panel">
+          <div class="result-head">
+            <div>
+              <h2>Mutation heatmap</h2>
+              <p id="figureSubtitle">Upload FASTQ files or load the demo dataset to generate a figure.</p>
+            </div>
+            <div class="btns">
+              <label class="site-picker" id="sitePicker"><span>Displayed site</span><select id="siteSelect" class="site-select" aria-label="Displayed site"></select></label>
+              <button class="btn" id="sortBtn" type="button">Sort by max edit</button>
+              <button class="btn" id="copySettingsBtn" type="button">Copy settings</button>
+            </div>
+          </div>
+          <div id="figureWrap" class="figure-wrap">
+            <div class="empty">
+              <strong>Load FASTQ files to generate the figure</strong>
+              <p>Confirm the reference sequence, add FASTQ files, then click Run analysis.</p>
+            </div>
+          </div>
+          <div class="tabs">
+            <button class="tab active" data-tab="overview" type="button">Overview</button>
+            <button class="tab" data-tab="qc" type="button">QC</button>
+            <button class="tab" data-tab="mutation" type="button">Processed table</button>
+            <button class="tab" data-tab="alleles" type="button">Allele spectrum</button>
+            <button class="tab" data-tab="samples" type="button">Samples</button>
+            <button class="tab" data-tab="export" type="button">Export</button>
+          </div>
+          <div id="tabBody" class="tab-body"></div>
+        </section>
+      </main>
+    </div>
   </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      const DEMO_REF = 'TGGTAGTTGGAGCTGGTGGCGTAGGCAAGAGTGCCTTGACGATCTGACCGTTACCG';
+      const PUBLIC_BENCHMARK = {
+        name: 'CRISPResso2 EMX1 Base Editor Public FASTQ Benchmark',
+        reference: 'GGCCCCAGTGGCTGCTCTGGGGGCCTCCTGAGTTTCTCATCTGTGCCCCTCCCTCCCTGGCCCAGGTGAAGGTGTGGTTCCAGAACCGGAGGACAAAGTACAAACGGCAGAAGCTGGAGGAGGAAGGGCCTGAGTCCGAGCAGAAGAAGAAGGGCTCCCATCACATCAACCGGTGGCGCATTGCCACGAAGCAGGCCAATGGGGAGGACATCGATGTCACCTCCAATGACTAGGGTGG',
+        spacer: 'GAGTCCGAGCAGAAGAAGAA',
+        pam: 'NGG',
+        spacerWindow: '4-13',
+        expectedEdit: 'C>T',
+        fastqPath: 'benchmarks/public/crispresso2_base_editor/raw/base_editor.fastq.gz'
+      };
+      const BASES = ['A', 'C', 'G', 'T', 'N'];
+      const state = {
+        files: [],
+        results: null,
+        activeTab: 'overview',
+        selectedSample: '',
+        selectedSiteId: '',
+        labels: new Map(),
+        sortByMax: false,
+        processing: false,
+        cancelRequested: false,
+        log: []
+      };
+
+      const $ = (id) => document.getElementById(id);
+      const els = {
+        referenceSeq: $('referenceSeq'),
+        runName: $('runName'),
+        assayType: $('assayType'),
+        assayFields: $('assayFields'),
+        siteManifest: $('siteManifest'),
+        targets: $('targets'),
+        minDepth: $('minDepth'),
+        minQ: $('minQ'),
+        minLen: $('minLen'),
+        readLimit: $('readLimit'),
+        minIdentity: $('minIdentity'),
+        signalMode: $('signalMode'),
+        expectedEdit: $('expectedEdit'),
+        dropN: $('dropN'),
+        fileInput: $('fileInput'),
+        drop: $('drop'),
+        fileList: $('fileList'),
+        fileBadge: $('fileBadge'),
+        publicBenchmarkBtn: $('publicBenchmarkBtn'),
+        sitePicker: $('sitePicker'),
+        preflightBadge: $('preflightBadge'),
+        preflightBody: $('preflightBody'),
+        runBadge: $('runBadge'),
+        exportBadge: $('exportBadge'),
+        progressBar: $('progressBar'),
+        progressText: $('progressText'),
+        log: $('log'),
+        figureWrap: $('figureWrap'),
+        siteSelect: $('siteSelect'),
+        tabBody: $('tabBody'),
+        figureSubtitle: $('figureSubtitle')
+      };
+
+      function escapeHtml(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, (char) => ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;'
+        }[char]));
+      }
+
+      function normalizeSeq(value) {
+        return String(value || '').toUpperCase().replace(/[^ACGTN]/g, '');
+      }
+
+      function formatInt(value) {
+        return Math.round(Number(value) || 0).toLocaleString();
+      }
+
+      function formatPct(value, digits = 1) {
+        const n = Number(value);
+        return Number.isFinite(n) ? n.toFixed(digits) : '0.0';
+      }
+
+      function formatBytes(bytes) {
+        const units = ['B', 'KB', 'MB', 'GB'];
+        let value = Number(bytes) || 0;
+        let idx = 0;
+        while (value >= 1024 && idx < units.length - 1) {
+          value /= 1024;
+          idx += 1;
+        }
+        return `${value.toFixed(idx ? 1 : 0)} ${units[idx]}`;
+      }
+
+      function formatTimestamp(date, withSeconds = true) {
+        const pad = (value) => String(value).padStart(2, '0');
+        const d = date instanceof Date ? date : new Date(date);
+        const time = `${pad(d.getHours())}:${pad(d.getMinutes())}${withSeconds ? `:${pad(d.getSeconds())}` : ''}`;
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${time}`;
+      }
+
+      function clip(value, size) {
+        const text = String(value == null ? '' : value);
+        return text.length > size ? `${text.slice(0, Math.max(1, size - 3))}...` : text;
+      }
+
+      function addLog(message, type = 'info') {
+        state.log.unshift({ message, type, time: new Date() });
+        state.log = state.log.slice(0, 40);
+        renderLog();
+      }
+
+      function renderLog() {
+        if (!state.log.length) {
+          els.log.innerHTML = '<div class="log-row">No run activity yet.</div>';
+          return;
+        }
+        els.log.innerHTML = state.log.map((row) => {
+          const time = formatTimestamp(row.time);
+          return `<div class="log-row ${escapeHtml(row.type)}"><strong>${time}</strong> ${escapeHtml(row.message)}</div>`;
+        }).join('');
+      }
+
+      function setProgress(percent, message) {
+        els.progressBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+        els.progressText.textContent = message;
+      }
+
+      function setRunBadge(text, kind) {
+        els.runBadge.textContent = text;
+        els.runBadge.className = `badge ${kind || ''}`.trim();
+      }
+
+      function setStep(activeStep, completedSteps) {
+        const completed = new Set(completedSteps || []);
+        document.querySelectorAll('.step').forEach((step) => {
+          const name = step.dataset.step;
+          step.classList.toggle('active', name === activeStep);
+          step.classList.toggle('done', completed.has(name));
+        });
+      }
+
+      function renderAssayFields() {
+        const type = els.assayType.value;
+        const value = (id, fallback) => $(id)?.value || fallback;
+        if (type === 'cas') {
+          els.assayFields.innerHTML = `
+            <div class="inline-grid">
+              <div class="field">
+                <label for="casSpacer">Spacer / guide sequence</label>
+                <input id="casSpacer" value="${escapeHtml(value('casSpacer', ''))}" placeholder="e.g. 20 nt guide sequence">
+              </div>
+              <div class="field">
+                <label for="casPam">PAM pattern</label>
+                <input id="casPam" value="${escapeHtml(value('casPam', 'NGG'))}" placeholder="e.g. NGG, TTTV">
+              </div>
+            </div>
+            <div class="field">
+              <label for="casWindow">Targeting window within spacer</label>
+              <input id="casWindow" value="${escapeHtml(value('casWindow', '4-8'))}" placeholder="e.g. 4-8, 17-18, 1-20">
+              <p class="hint">Use 1-based spacer coordinates. The app maps the matched spacer/PAM to amplicon coordinates.</p>
+            </div>
+          `;
+        } else if (type === 'tale') {
+          els.assayFields.innerHTML = `
+            <div class="field">
+              <label for="taleLeft">Left TALE binding site</label>
+              <input id="taleLeft" value="${escapeHtml(value('taleLeft', ''))}" placeholder="Left TALE binding sequence">
+            </div>
+            <div class="field">
+              <label for="taleRight">Right TALE binding site</label>
+              <input id="taleRight" value="${escapeHtml(value('taleRight', ''))}" placeholder="Right TALE binding sequence">
+            </div>
+            <div class="inline-grid">
+              <div class="field">
+                <label for="taleSpacer">Known spacer sequence</label>
+                <input id="taleSpacer" value="${escapeHtml(value('taleSpacer', ''))}" placeholder="Optional spacer-only fallback">
+              </div>
+              <div class="field">
+                <label for="talePadding">Window padding</label>
+                <input id="talePadding" type="number" min="0" step="1" value="${escapeHtml(value('talePadding', '0'))}">
+              </div>
+            </div>
+            <p class="hint">For TALEN assays, the spacer between left and right binding sites is used as the default targeting window. Spacer-only matching is a fallback.</p>
+          `;
+        } else {
+          els.assayFields.innerHTML = `
+            <p class="hint">Custom mode uses the manual target positions below as the heatmap target window.</p>
+          `;
+        }
+      }
+
+      function isFastqFile(file) {
+        return /\.(fastq|fq)(\.gz)?$/i.test(file.name);
+      }
+
+      function addFiles(fileList) {
+        const incoming = Array.from(fileList || []);
+        const added = [];
+        for (const file of incoming) {
+          if (!isFastqFile(file)) {
+            addLog(`${file.name} is not a supported FASTQ format. Use .fastq, .fq, .fastq.gz, or .fq.gz.`, 'warn');
+            continue;
+          }
+          const exists = state.files.some((old) => old.name === file.name && old.size === file.size);
+          if (!exists) {
+            state.files.push(file);
+            added.push(file.name);
+          }
+        }
+        if (added.length) {
+          addLog(`Added ${added.length} FASTQ file(s).`, 'ok');
+          setStep('upload', ['setup']);
+        }
+        renderFiles();
+        renderSummary();
+      }
+
+      function renderFiles() {
+        els.fileBadge.textContent = `${state.files.length} files`;
+        if (!state.files.length) {
+          els.fileList.innerHTML = '<p class="hint">No FASTQ files have been added yet.</p>';
+          renderPreflight();
+          return;
+        }
+        els.fileList.innerHTML = state.files.map((file, idx) => {
+          const sample = inferSampleName(file.name);
+          const role = inferReadRole(file.name);
+          return `
+            <div class="file-row">
+              <div>
+                <strong>${escapeHtml(file.name)}</strong>
+                <span>${escapeHtml(sample)} - ${escapeHtml(role)} - ${formatBytes(file.size)}</span>
+              </div>
+              <button class="remove-file" data-remove-file="${idx}" type="button" aria-label="Remove ${escapeHtml(file.name)}">x</button>
+            </div>
+          `;
+        }).join('');
+        renderPreflight();
+      }
+
+      function inferReadRole(name) {
+        if (/(^|[_\-.])R?1([_\-.]|$)/i.test(name) || /_R1_001/i.test(name)) return 'R1';
+        if (/(^|[_\-.])R?2([_\-.]|$)/i.test(name) || /_R2_001/i.test(name)) return 'R2';
+        return 'single';
+      }
+
+      function inferSampleName(name) {
+        return String(name)
+          .replace(/\.(fastq|fq)(\.gz)?$/i, '')
+          .replace(/_R[12]_001$/i, '')
+          .replace(/[_\-.]R[12]$/i, '')
+          .replace(/[_\-.][12]$/i, '')
+          .replace(/\s+/g, '_') || 'sample';
+      }
+
+      function groupFiles(files) {
+        const groups = new Map();
+        for (const file of files) {
+          const sample = inferSampleName(file.name);
+          if (!groups.has(sample)) groups.set(sample, { sample, files: [], roles: new Set() });
+          const group = groups.get(sample);
+          group.files.push(file);
+          group.roles.add(inferReadRole(file.name));
+        }
+        return Array.from(groups.values()).sort((a, b) => a.sample.localeCompare(b.sample));
+      }
+
+      function renderPreflight() {
+        const reference = normalizeSeq(els.referenceSeq.value);
+        const groups = groupFiles(state.files);
+        const settings = getSettings(reference);
+        const targetPositions = Array.from(settings.targets).sort((a, b) => a - b);
+        const warnings = [];
+        let siteConfigs = [{ siteName: 'Primary site', reference, settings }];
+        if (reference.length < 20) warnings.push('Reference amplicon is shorter than 20 bp.');
+        try {
+          if (reference.length >= 20) siteConfigs = getSiteConfigs(reference);
+        } catch (error) {
+          warnings.push(error.message || String(error));
+        }
+        if (!state.files.length) warnings.push('No FASTQ files have been added.');
+        if (!targetPositions.length) warnings.push('No target positions are currently defined.');
+        if (settings.targetWarning) warnings.push(settings.targetWarning);
+        if (state.files.some((file) => /\.gz$/i.test(file.name)) && !('DecompressionStream' in window)) warnings.push('This browser cannot decompress FASTQ.GZ files.');
+        warnings.push('Current limitation: paired-end files are grouped but not merged into consensus reads.');
+        warnings.push('Adapter trimming is not performed; trim adapters upstream when needed.');
+
+        const statusReady = reference.length >= 20 && state.files.length && targetPositions.length && !settings.targetWarning && !warnings.some((item) => item.startsWith('Site manifest'));
+        els.preflightBadge.textContent = statusReady ? 'ready' : 'review';
+        els.preflightBadge.className = `badge ${statusReady ? 'good' : 'warn'}`;
+        const sampleText = groups.length
+          ? groups.slice(0, 5).map((group) => `${group.sample} (${Array.from(group.roles).join('+')}, ${group.files.length} file${group.files.length === 1 ? '' : 's'})`).join('; ') + (groups.length > 5 ? `; +${groups.length - 5} more` : '')
+          : 'none';
+        els.preflightBody.innerHTML = `
+          <div class="preflight-grid">
+            <div class="preflight-row"><span>Reference</span><strong>${formatInt(reference.length)} bp</strong></div>
+            <div class="preflight-row"><span>Sites</span><strong>${formatInt(siteConfigs.length)} site${siteConfigs.length === 1 ? '' : 's'}</strong></div>
+            <div class="preflight-row"><span>Samples</span><strong>${escapeHtml(sampleText)}</strong></div>
+            <div class="preflight-row"><span>Assay inference</span><strong>${escapeHtml(settings.targetSource)}</strong></div>
+            <div class="preflight-row"><span>Target positions</span><strong>${escapeHtml(targetPositions.join(', ') || 'none')}</strong></div>
+            <div class="preflight-row"><span>Expected edit</span><strong>${escapeHtml(settings.expectedEdit ? settings.expectedEdit.label : 'not specified')}</strong></div>
+            <div class="preflight-row"><span>Run settings</span><strong>Q >= ${settings.minQ}, length >= ${settings.minLen} bp, identity >= ${formatPct(settings.minIdentity * 100, 1)}%, limit ${formatInt(settings.readLimit)} reads/sample</strong></div>
+          </div>
+          <ul class="warning-list">${warnings.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+        `;
+      }
+
+      async function readTextFile(file) {
+        if (/\.gz$/i.test(file.name)) {
+          if (!('DecompressionStream' in window)) {
+            throw new Error('This browser cannot decompress gzip FASTQ files. Please use uncompressed .fastq files.');
+          }
+          const stream = file.stream().pipeThrough(new DecompressionStream('gzip'));
+          const buffer = await new Response(stream).arrayBuffer();
+          return new TextDecoder().decode(buffer);
+        }
+        return file.text();
+      }
+
+      function getSettings(referenceOverride) {
+        const reference = normalizeSeq(referenceOverride || els.referenceSeq.value);
+        const assay = deriveAssayTargets(reference);
+        return {
+          minQ: Math.max(0, Number(els.minQ.value) || 0),
+          minLen: Math.max(1, Number(els.minLen.value) || 1),
+          readLimit: Math.max(100, Number(els.readLimit.value) || 100),
+          minIdentity: Math.max(0, Math.min(100, Number(els.minIdentity.value) || 0)) / 100,
+          dropN: els.dropN.checked,
+          minDepth: Math.max(0, Number(els.minDepth.value) || 0),
+          signalMode: els.signalMode.value,
+          expectedEdit: parseExpectedEdit(els.expectedEdit.value),
+          assayType: els.assayType.value,
+          targets: assay.targets,
+          targetSource: assay.source,
+          targetWarning: assay.warning,
+          assayDetails: assay.details
+        };
+      }
+
+      function parseTargets(value) {
+        const targets = new Set();
+        String(value || '').split(/[,\s;]+/).filter(Boolean).forEach((part) => {
+          const range = part.match(/^(\d+)-(\d+)$/);
+          if (range) {
+            const start = Number(range[1]);
+            const end = Number(range[2]);
+            for (let pos = Math.min(start, end); pos <= Math.max(start, end); pos += 1) targets.add(pos);
+          } else {
+            const pos = Number(part.replace(/\D/g, ''));
+            if (pos) targets.add(pos);
+          }
+        });
+        return targets;
+      }
+
+      function parseExpectedEdit(value) {
+        const match = String(value || '').toUpperCase().match(/^([ACGT])>([ACGT])$/);
+        if (!match || match[1] === match[2]) return null;
+        return { from: match[1], to: match[2], label: `${match[1]}>${match[2]}` };
+      }
+
+      function deriveAssayTargets(reference) {
+        const manual = parseTargets(els.targets.value);
+        const fallback = (warning) => ({
+          targets: manual,
+          source: manual.size ? 'manual / fallback target positions' : 'no target positions',
+          warning,
+          details: {}
+        });
+        const assayType = els.assayType.value;
+
+        if (assayType === 'cas') {
+          const spacer = normalizeSeq($('casSpacer')?.value || '');
+          const pamPattern = normalizePattern($('casPam')?.value || 'NGG');
+          const spacerWindow = parseTargets($('casWindow')?.value || '4-8');
+          if (!spacer) return fallback('Cas mode: no spacer/guide sequence was provided, so manual target positions are used.');
+          const match = findSpacerInReference(reference, spacer, pamPattern);
+          if (!match) return fallback('Cas mode: spacer was not found in the reference, so manual target positions are used.');
+          const relativePositions = spacerWindow.size ? spacerWindow : parseTargets(`1-${spacer.length}`);
+          const targets = new Set();
+          relativePositions.forEach((pos) => {
+            if (pos < 1 || pos > spacer.length) return;
+            const refPosition = match.orientation === 'forward'
+              ? match.start + pos - 1
+              : match.start + spacer.length - pos;
+            if (refPosition >= 1 && refPosition <= reference.length) targets.add(refPosition);
+          });
+          return {
+            targets,
+            source: `Cas ${match.orientation} spacer match - PAM ${match.pamMatched ? 'matched' : 'not confirmed'} - spacer window ${$('casWindow')?.value || '4-8'}`,
+            warning: match.pamMatched ? '' : 'Cas mode: spacer was found, but the PAM pattern was not confirmed.',
+            details: { spacer, pamPattern, spacerWindow: $('casWindow')?.value || '4-8', orientation: match.orientation }
+          };
+        }
+
+        if (assayType === 'tale') {
+          const left = normalizeSeq($('taleLeft')?.value || '');
+          const right = normalizeSeq($('taleRight')?.value || '');
+          const spacer = normalizeSeq($('taleSpacer')?.value || '');
+          const padding = Math.max(0, Number($('talePadding')?.value) || 0);
+          if (left && right) {
+            const match = findTalePair(reference, left, right);
+            if (match) {
+              const targets = positionsFromRange(match.start - padding, match.end + padding, reference.length);
+              return {
+                targets,
+                source: `TALE/TALEN binding sites matched - spacer ${match.spacerLength} bp${padding ? ` - padding ${padding} bp` : ''}`,
+                warning: '',
+                details: { left, right, spacerLength: match.spacerLength, padding }
+              };
+            }
+            return fallback('TALE/TALEN mode: left/right binding sites were not found in the reference, so manual target positions are used.');
+          }
+          if (spacer) {
+            const match = findSequenceEitherStrand(reference, spacer);
+            if (match) {
+              const targets = positionsFromRange(match.start, match.end, reference.length);
+              return {
+                targets,
+                source: `TALE spacer-only ${match.orientation} match`,
+                warning: 'TALE/TALEN mode: the window was inferred from spacer-only matching. Left/right binding sites are recommended when available.',
+                details: { spacer, orientation: match.orientation }
+              };
+            }
+            return fallback('TALE/TALEN mode: spacer sequence was not found in the reference, so manual target positions are used.');
+          }
+          return fallback('TALE/TALEN mode: no binding site or spacer sequence was provided, so manual target positions are used.');
+        }
+
+        return fallback('');
+      }
+
+      function normalizePattern(value) {
+        return String(value || '').toUpperCase().replace(/[^ACGTRYSWKMBDHVN]/g, 'N');
+      }
+
+      function positionsFromRange(start, end, length) {
+        const targets = new Set();
+        const first = Math.max(1, Math.min(start, end));
+        const last = Math.min(length, Math.max(start, end));
+        for (let pos = first; pos <= last; pos += 1) targets.add(pos);
+        return targets;
+      }
+
+      function findSpacerInReference(reference, spacer, pamPattern) {
+        const candidates = [];
+        collectSpacerCandidates(candidates, reference, spacer, pamPattern, 'forward');
+        collectSpacerCandidates(candidates, reference, reverseComplement(spacer), pamPattern, 'reverse');
+        candidates.sort((a, b) => b.score - a.score || Math.abs(centerOf(reference) - centerOfMatch(a)) - Math.abs(centerOf(reference) - centerOfMatch(b)));
+        return candidates[0] || null;
+      }
+
+      function collectSpacerCandidates(candidates, reference, query, pamPattern, orientation) {
+        if (!query) return;
+        let start = reference.indexOf(query);
+        while (start !== -1) {
+          const oneBasedStart = start + 1;
+          const pamInfo = scorePam(reference, start, query.length, pamPattern, orientation);
+          candidates.push({
+            start: oneBasedStart,
+            end: oneBasedStart + query.length - 1,
+            orientation,
+            pamMatched: pamInfo.matched,
+            score: query.length + pamInfo.score
+          });
+          start = reference.indexOf(query, start + 1);
+        }
+      }
+
+      function scorePam(reference, startZero, spacerLength, pamPattern, orientation) {
+        if (!pamPattern) return { matched: true, score: 0 };
+        const pamLength = pamPattern.length;
+        let pamSeq = '';
+        let pattern = pamPattern;
+        if (orientation === 'forward') {
+          pamSeq = reference.slice(startZero + spacerLength, startZero + spacerLength + pamLength);
+        } else {
+          pamSeq = reference.slice(Math.max(0, startZero - pamLength), startZero);
+          pattern = reverseComplementPattern(pamPattern);
+        }
+        const matched = pamSeq.length === pamLength && matchIupac(pamSeq, pattern);
+        return { matched, score: matched ? 100 : -8 };
+      }
+
+      function centerOf(reference) {
+        return reference.length / 2;
+      }
+
+      function centerOfMatch(match) {
+        return (match.start + match.end) / 2;
+      }
+
+      function matchIupac(sequence, pattern) {
+        const map = {
+          A: 'A', C: 'C', G: 'G', T: 'T', N: 'ACGT',
+          R: 'AG', Y: 'CT', S: 'GC', W: 'AT', K: 'GT', M: 'AC',
+          B: 'CGT', D: 'AGT', H: 'ACT', V: 'ACG'
+        };
+        if (sequence.length !== pattern.length) return false;
+        for (let i = 0; i < pattern.length; i += 1) {
+          const allowed = map[pattern[i]] || pattern[i];
+          if (!allowed.includes(sequence[i])) return false;
+        }
+        return true;
+      }
+
+      function reverseComplementPattern(pattern) {
+        const map = { A: 'T', C: 'G', G: 'C', T: 'A', R: 'Y', Y: 'R', S: 'S', W: 'W', K: 'M', M: 'K', B: 'V', V: 'B', D: 'H', H: 'D', N: 'N' };
+        return String(pattern || '').split('').reverse().map((base) => map[base] || 'N').join('');
+      }
+
+      function findSequenceEitherStrand(reference, sequence) {
+        const direct = reference.indexOf(sequence);
+        if (direct !== -1) return { start: direct + 1, end: direct + sequence.length, orientation: 'forward' };
+        const rc = reverseComplement(sequence);
+        const reverse = reference.indexOf(rc);
+        if (reverse !== -1) return { start: reverse + 1, end: reverse + rc.length, orientation: 'reverse' };
+        return null;
+      }
+
+      function findTalePair(reference, left, right) {
+        const leftVariants = uniqueSeqs([left, reverseComplement(left)]);
+        const rightVariants = uniqueSeqs([right, reverseComplement(right)]);
+        const candidates = [];
+        leftVariants.forEach((leftSeq) => {
+          rightVariants.forEach((rightSeq) => {
+            const leftSites = allOccurrences(reference, leftSeq);
+            const rightSites = allOccurrences(reference, rightSeq);
+            leftSites.forEach((leftStart) => {
+              rightSites.forEach((rightStart) => {
+                const leftEnd = leftStart + leftSeq.length - 1;
+                const rightEnd = rightStart + rightSeq.length - 1;
+                if (leftEnd < rightStart) {
+                  addTaleCandidate(candidates, leftEnd + 1, rightStart - 1, reference.length);
+                } else if (rightEnd < leftStart) {
+                  addTaleCandidate(candidates, rightEnd + 1, leftStart - 1, reference.length);
+                }
+              });
+            });
+          });
+        });
+        candidates.sort((a, b) => b.score - a.score || Math.abs(18 - a.spacerLength) - Math.abs(18 - b.spacerLength));
+        return candidates[0] || null;
+      }
+
+      function uniqueSeqs(values) {
+        return Array.from(new Set(values.filter(Boolean)));
+      }
+
+      function allOccurrences(reference, query) {
+        const positions = [];
+        let start = reference.indexOf(query);
+        while (start !== -1) {
+          positions.push(start + 1);
+          start = reference.indexOf(query, start + 1);
+        }
+        return positions;
+      }
+
+      function addTaleCandidate(candidates, start, end, length) {
+        if (end < start) return;
+        const spacerLength = end - start + 1;
+        const rangeScore = spacerLength >= 8 && spacerLength <= 30 ? 100 : 0;
+        candidates.push({
+          start: Math.max(1, start),
+          end: Math.min(length, end),
+          spacerLength,
+          score: rangeScore + Math.max(0, 40 - Math.abs(18 - spacerLength))
+        });
+      }
+
+      function parseFastqText(text, settings) {
+        const lines = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+        const estimatedRecords = Math.floor(lines.length / 4);
+        const limit = Math.min(settings.readLimit, estimatedRecords || settings.readLimit);
+        const unique = new Map();
+        const readLengths = [];
+        let totalRecords = 0;
+        let keptRecords = 0;
+        let malformedRecords = 0;
+        let droppedShort = 0;
+        let droppedQuality = 0;
+        let droppedN = 0;
+        let totalQuality = 0;
+        let qualityReads = 0;
+        let basesKept = 0;
+
+        for (let i = 0; i + 3 < lines.length && totalRecords < limit; i += 4) {
+          const header = lines[i];
+          const seqLine = lines[i + 1];
+          const plus = lines[i + 2];
+          const qualLine = lines[i + 3];
+          if (!header || header[0] !== '@' || !plus || plus[0] !== '+') {
+            malformedRecords += 1;
+            continue;
+          }
+          totalRecords += 1;
+          const seq = normalizeSeq(seqLine);
+          const qual = String(qualLine || '').trim();
+          if (!seq || qual.length < seq.length) {
+            malformedRecords += 1;
+            continue;
+          }
+          if (seq.length < settings.minLen) {
+            droppedShort += 1;
+            continue;
+          }
+          if (settings.dropN && seq.includes('N')) {
+            droppedN += 1;
+            continue;
+          }
+          const meanQ = meanQuality(qual.slice(0, seq.length));
+          totalQuality += meanQ;
+          qualityReads += 1;
+          if (meanQ < settings.minQ) {
+            droppedQuality += 1;
+            continue;
+          }
+          keptRecords += 1;
+          basesKept += seq.length;
+          readLengths.push(seq.length);
+          const current = unique.get(seq) || { sequence: seq, count: 0, qualitySum: 0 };
+          current.count += 1;
+          current.qualitySum += meanQ;
+          unique.set(seq, current);
+        }
+
+        return {
+          estimatedRecords,
+          readLimitReached: estimatedRecords > limit,
+          totalRecords,
+          keptRecords,
+          malformedRecords,
+          droppedShort,
+          droppedQuality,
+          droppedN,
+          unique,
+          uniqueReads: unique.size,
+          meanQuality: qualityReads ? totalQuality / qualityReads : 0,
+          meanReadLength: keptRecords ? basesKept / keptRecords : 0,
+          medianReadLength: median(readLengths)
+        };
+      }
+
+      function meanQuality(qual) {
+        let sum = 0;
+        for (let i = 0; i < qual.length; i += 1) sum += Math.max(0, qual.charCodeAt(i) - 33);
+        return qual.length ? sum / qual.length : 0;
+      }
+
+      function median(values) {
+        if (!values.length) return 0;
+        const copy = values.slice().sort((a, b) => a - b);
+        return copy[Math.floor(copy.length / 2)];
+      }
+
+      function mergeParsed(target, parsed) {
+        target.estimatedRecords += parsed.estimatedRecords;
+        target.totalRecords += parsed.totalRecords;
+        target.keptRecords += parsed.keptRecords;
+        target.malformedRecords += parsed.malformedRecords;
+        target.droppedShort += parsed.droppedShort;
+        target.droppedQuality += parsed.droppedQuality;
+        target.droppedN += parsed.droppedN;
+        target.readLimitReached = target.readLimitReached || parsed.readLimitReached;
+        target.meanQualityParts.push({ mean: parsed.meanQuality, n: parsed.totalRecords });
+        target.readLengths.push(parsed.medianReadLength);
+        for (const [seq, row] of parsed.unique.entries()) {
+          const current = target.unique.get(seq) || { sequence: seq, count: 0, qualitySum: 0 };
+          current.count += row.count;
+          current.qualitySum += row.qualitySum;
+          target.unique.set(seq, current);
+        }
+      }
+
+      function emptyParsedGroup() {
+        return {
+          estimatedRecords: 0,
+          totalRecords: 0,
+          keptRecords: 0,
+          malformedRecords: 0,
+          droppedShort: 0,
+          droppedQuality: 0,
+          droppedN: 0,
+          readLimitReached: false,
+          unique: new Map(),
+          meanQualityParts: [],
+          readLengths: []
+        };
+      }
+
+      function groupMeanQuality(group) {
+        const total = group.meanQualityParts.reduce((sum, part) => sum + part.n, 0);
+        if (!total) return 0;
+        return group.meanQualityParts.reduce((sum, part) => sum + (part.mean * part.n), 0) / total;
+      }
+
+      async function runAnalysis() {
+        if (state.processing) return;
+        const reference = normalizeSeq(els.referenceSeq.value);
+        if (reference.length < 20) {
+          addLog('Reference amplicon sequence is too short. Enter at least 20 bases.', 'bad');
+          setStep('setup', []);
+          return;
+        }
+        if (!state.files.length) {
+          addLog('No FASTQ files are available. Add files or load the demo dataset first.', 'warn');
+          setStep('upload', ['setup']);
+          return;
+        }
+
+        let siteConfigs = [];
+        try {
+          siteConfigs = getSiteConfigs(reference);
+        } catch (error) {
+          addLog(error.message || String(error), 'bad');
+          setStep('setup', []);
+          return;
+        }
+        const primarySettings = siteConfigs[0].settings;
+        const fileGroups = groupFiles(state.files);
+        state.processing = true;
+        state.cancelRequested = false;
+        state.results = null;
+        state.labels.clear();
+        state.selectedSample = '';
+        state.selectedSiteId = siteConfigs[0] ? siteConfigs[0].siteId : '';
+        state.sortByMax = false;
+        $('runBtn').disabled = true;
+        $('cancelBtn').disabled = false;
+        setRunBadge('running', 'info');
+        setStep('process', ['setup', 'upload']);
+        setProgress(2, 'Reading FASTQ files.');
+        addLog(`Starting analysis for ${fileGroups.length} sample group(s) across ${siteConfigs.length} site(s).`, 'info');
+        if (primarySettings.targetWarning) addLog(primarySettings.targetWarning, 'warn');
+        else if (primarySettings.assayType !== 'custom') addLog(primarySettings.targetSource, 'ok');
+        renderSummary();
+        renderFigure();
+        renderTab();
+
+        try {
+          const parsedGroups = [];
+          for (let groupIndex = 0; groupIndex < fileGroups.length; groupIndex += 1) {
+            if (state.cancelRequested) throw new Error('Analysis was canceled.');
+            const group = fileGroups[groupIndex];
+            const parsedGroup = emptyParsedGroup();
+            addLog(`${group.sample}: reading ${group.files.length} file(s).`, 'info');
+
+            for (const file of group.files) {
+              const text = await readTextFile(file);
+              const parsed = parseFastqText(text, primarySettings);
+              mergeParsed(parsedGroup, parsed);
+              await yieldToBrowser();
+            }
+            parsedGroups.push({ group, parsedGroup });
+          }
+
+          const siteResults = [];
+          const totalJobs = Math.max(1, siteConfigs.length * parsedGroups.length);
+          let jobIndex = 0;
+          for (const siteConfig of siteConfigs) {
+            const samples = [];
+            for (const parsed of parsedGroups) {
+              if (state.cancelRequested) throw new Error('Analysis was canceled.');
+              setProgress(18 + (jobIndex / totalJobs) * 72, `${siteConfig.siteName}: ${parsed.group.sample} alignment.`);
+              const sampleResult = await analyzeSample(parsed.group, parsed.parsedGroup, siteConfig.reference, siteConfig.settings, (fraction) => {
+                setProgress(18 + ((jobIndex + fraction) / totalJobs) * 72, `${siteConfig.siteName}: ${parsed.group.sample} mutation calling ${Math.round(fraction * 100)}%`);
+              });
+              samples.push(sampleResult);
+              addLog(`${siteConfig.siteName} / ${parsed.group.sample}: ${formatInt(sampleResult.qc.passedReads)} QC-passed, ${formatInt(sampleResult.qc.alignedReads)} alignment-passed reads, max ${formatPct(sampleResult.maxPercent, 1)}%`, sampleResult.warnings.length ? 'warn' : 'ok');
+              jobIndex += 1;
+            }
+            siteResults.push(buildSiteResult(samples, siteConfig));
+          }
+
+          const run = buildRunResult(siteResults);
+          state.results = run;
+          state.selectedSiteId = run.sites[0] ? run.sites[0].siteId : '';
+          const activeSite = currentSite();
+          state.selectedSample = activeSite && activeSite.samples[0] ? activeSite.samples[0].sample : '';
+          setProgress(100, 'Analysis complete. Review figures and export files.');
+          setRunBadge('done', 'good');
+          els.exportBadge.textContent = 'ready';
+          els.exportBadge.className = 'badge good';
+          setStep('results', ['setup', 'upload', 'process']);
+          addLog('Analysis complete.', 'ok');
+          renderSummary();
+          renderFigure();
+          renderTab();
+        } catch (error) {
+          setRunBadge('error', 'bad');
+          setProgress(0, error.message || 'Analysis failed.');
+          addLog(error.message || String(error), 'bad');
+          setStep('process', ['setup', 'upload']);
+        } finally {
+          state.processing = false;
+          state.cancelRequested = false;
+          $('runBtn').disabled = false;
+          $('cancelBtn').disabled = true;
+        }
+      }
+
+      function getSiteConfigs(primaryReference) {
+        const primarySettings = getSettings(primaryReference);
+        const primary = {
+          siteId: 'primary',
+          siteName: 'Primary site',
+          reference: primaryReference,
+          settings: primarySettings
+        };
+        return [primary, ...parseSiteManifest(els.siteManifest.value, primarySettings)];
+      }
+
+      function parseSiteManifest(value, baseSettings) {
+        const rows = String(value || '').split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith('#'));
+        const sites = [];
+        rows.forEach((line, idx) => {
+          const cells = line.includes('\t') ? line.split('\t') : line.split(',');
+          const siteName = (cells[0] || '').trim();
+          const reference = normalizeSeq(cells[1] || '');
+          const targetText = cells.slice(2).join(',').trim();
+          if (/^site(_|\s)?name$/i.test(siteName)) return;
+          if (!siteName || reference.length < 20) throw new Error(`Site manifest row ${idx + 1} needs a site name and a reference sequence of at least 20 bp.`);
+          const targets = parseTargets(targetText);
+          if (!targets.size) throw new Error(`Site manifest row ${idx + 1} needs target positions, for example 16-23.`);
+          const siteId = uniqueSiteId(siteName, sites);
+          sites.push({
+            siteId,
+            siteName,
+            reference,
+            settings: {
+              ...baseSettings,
+              assayType: 'custom',
+              targets,
+              targetSource: 'site manifest target positions',
+              targetWarning: '',
+              assayDetails: { manifest: true }
+            }
+          });
+        });
+        return sites;
+      }
+
+      function uniqueSiteId(name, existing) {
+        const base = String(name || 'site').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'site';
+        let id = base;
+        let counter = 2;
+        const used = new Set(['primary', ...existing.map((site) => site.siteId)]);
+        while (used.has(id)) {
+          id = `${base}_${counter}`;
+          counter += 1;
+        }
+        return id;
+      }
+
+      async function analyzeSample(group, parsedGroup, reference, settings, onProgress) {
+        const stats = Array.from({ length: reference.length }, (_, idx) => ({
+          position: idx + 1,
+          refBase: reference[idx],
+          substitutionReads: 0,
+          deletionReads: 0,
+          insertionReads: 0,
+          editedReads: 0,
+          coveredReads: 0,
+          A: 0,
+          C: 0,
+          G: 0,
+          T: 0,
+          N: 0
+        }));
+        const alleles = [];
+        let alignedReads = 0;
+        let noIndelReads = 0;
+        let editedReads = 0;
+        let lowIdentityReads = 0;
+        let totalIdentity = 0;
+        let identityWeight = 0;
+        const uniqueRows = Array.from(parsedGroup.unique.values()).sort((a, b) => b.count - a.count);
+
+        for (let idx = 0; idx < uniqueRows.length; idx += 1) {
+          if (state.cancelRequested) throw new Error('Analysis was canceled.');
+          const row = uniqueRows[idx];
+          const alignment = alignRead(reference, row.sequence);
+          if (alignment.identity < settings.minIdentity) {
+            lowIdentityReads += row.count;
+            continue;
+          }
+          const edits = collectEdits(alignment);
+          alignedReads += row.count;
+          totalIdentity += alignment.identity * row.count;
+          identityWeight += row.count;
+          if (!edits.hasIndel) noIndelReads += row.count;
+          if (edits.hasAnyEdit) editedReads += row.count;
+
+          if (edits.coveredStart && edits.coveredEnd) {
+            for (let position = edits.coveredStart; position <= edits.coveredEnd; position += 1) {
+              const stat = stats[position - 1];
+              if (stat) stat.coveredReads += row.count;
+            }
+          }
+
+          const editedPositions = new Set();
+          for (const edit of edits.items) {
+            const stat = stats[edit.position - 1];
+            if (!stat) continue;
+            if (edit.type === 'substitution') {
+              stat.substitutionReads += row.count;
+              const base = BASES.includes(edit.alt) ? edit.alt : 'N';
+              stat[base] += row.count;
+            } else if (edit.type === 'deletion') {
+              stat.deletionReads += row.count;
+            } else if (edit.type === 'insertion') {
+              stat.insertionReads += row.count;
+            }
+            editedPositions.add(edit.position);
+          }
+          for (const position of editedPositions) {
+            const stat = stats[position - 1];
+            if (stat) stat.editedReads += row.count;
+          }
+
+          alleles.push({
+            sample: group.sample,
+            sequence: row.sequence,
+            nReads: row.count,
+            ratio: 0,
+            orientation: alignment.orientation,
+            identity: alignment.identity,
+            editSignature: edits.signature || 'WT',
+            mismatchCount: edits.mismatchCount,
+            insertionCount: edits.insertionCount,
+            deletionCount: edits.deletionCount,
+            hasIndel: edits.hasIndel
+          });
+
+          if (idx % 24 === 0) {
+            onProgress(uniqueRows.length ? idx / uniqueRows.length : 1);
+            await yieldToBrowser();
+          }
+        }
+        alleles.forEach((allele) => {
+          allele.ratio = alignedReads ? allele.nReads / alignedReads : 0;
+        });
+
+        const rows = stats.map((stat) => {
+          const displayReads = getSignalReads(stat, settings.signalMode);
+          const expectedEditReads = getExpectedEditReads(stat, settings.expectedEdit);
+          return {
+            sample: group.sample,
+            position: stat.position,
+            refBase: stat.refBase,
+            substitutionReads: stat.substitutionReads,
+            deletionReads: stat.deletionReads,
+            insertionReads: stat.insertionReads,
+            editedReads: stat.editedReads,
+            displayReads,
+            denominator: stat.coveredReads,
+            percent: stat.coveredReads ? displayReads / stat.coveredReads * 100 : 0,
+            expectedEditReads,
+            expectedEditPercent: stat.coveredReads ? expectedEditReads / stat.coveredReads * 100 : 0,
+            coveredReads: stat.coveredReads,
+            A: stat.A,
+            C: stat.C,
+            G: stat.G,
+            T: stat.T,
+            N: stat.N
+          };
+        });
+
+        const maxPercent = Math.max(0, ...rows.map((row) => row.percent));
+        const warnings = [];
+        if (parsedGroup.keptRecords < settings.minDepth) warnings.push('below minimum reads');
+        if (parsedGroup.malformedRecords) warnings.push('malformed FASTQ records');
+        if (parsedGroup.readLimitReached) warnings.push('read limit applied');
+        if (!parsedGroup.keptRecords) warnings.push('no QC-passed reads');
+        if (lowIdentityReads) warnings.push('low-identity reads excluded');
+        if (parsedGroup.keptRecords && !alignedReads) warnings.push('no reads passed alignment identity');
+
+        return {
+          sample: group.sample,
+          files: group.files.map((file) => file.name),
+          roles: Array.from(group.roles),
+          qc: {
+            estimatedRecords: parsedGroup.estimatedRecords,
+            parsedRecords: parsedGroup.totalRecords,
+            passedReads: parsedGroup.keptRecords,
+            alignedReads,
+            lowIdentityReads,
+            noIndelReads,
+            editedReads,
+            uniqueReads: alleles.length,
+            meanQuality: groupMeanQuality(parsedGroup),
+            medianReadLength: median(parsedGroup.readLengths.filter(Boolean)),
+            droppedShort: parsedGroup.droppedShort,
+            droppedQuality: parsedGroup.droppedQuality,
+            droppedN: parsedGroup.droppedN,
+            malformedRecords: parsedGroup.malformedRecords,
+            readLimitReached: parsedGroup.readLimitReached,
+            meanIdentity: identityWeight ? totalIdentity / identityWeight : 0
+          },
+          positionRows: rows,
+          alleles: alleles.sort((a, b) => b.nReads - a.nReads),
+          maxPercent,
+          warnings
+        };
+      }
+
+      function getSignalReads(stat, mode) {
+        if (mode === 'substitution') return stat.substitutionReads;
+        if (mode === 'indel') return stat.deletionReads + stat.insertionReads;
+        return stat.editedReads;
+      }
+
+      function getExpectedEditReads(stat, expectedEdit) {
+        if (!expectedEdit || stat.refBase !== expectedEdit.from) return 0;
+        return stat[expectedEdit.to] || 0;
+      }
+
+      function alignRead(reference, sequence) {
+        const forward = alignCandidate(reference, sequence, 'forward');
+        const rcSeq = reverseComplement(sequence);
+        const reverse = alignCandidate(reference, rcSeq, 'reverse');
+        return reverse.score > forward.score ? reverse : forward;
+      }
+
+      function alignCandidate(reference, sequence, orientation) {
+        const direct = directAlignment(reference, sequence, orientation);
+        if (direct && direct.identity >= 0.86) return direct;
+        return needlemanSemiGlobal(reference, trimLongRead(reference, sequence), orientation);
+      }
+
+      function trimLongRead(reference, sequence) {
+        if (sequence.length <= reference.length + 80) return sequence;
+        const window = Math.min(sequence.length, reference.length + 40);
+        let bestStart = 0;
+        let bestScore = -Infinity;
+        const step = Math.max(1, Math.floor((sequence.length - window) / 80));
+        for (let start = 0; start + window <= sequence.length; start += step) {
+          const fragment = sequence.slice(start, start + window);
+          let matches = 0;
+          const limit = Math.min(reference.length, fragment.length);
+          for (let i = 0; i < limit; i += 1) if (reference[i] === fragment[i]) matches += 1;
+          if (matches > bestScore) {
+            bestScore = matches;
+            bestStart = start;
+          }
+        }
+        return sequence.slice(bestStart, bestStart + window);
+      }
+
+      function directAlignment(reference, sequence, orientation) {
+        if (reference.length !== sequence.length) return null;
+        let matches = 0;
+        let score = 0;
+        for (let i = 0; i < reference.length; i += 1) {
+          if (reference[i] === sequence[i]) {
+            matches += 1;
+            score += 2;
+          } else {
+            score -= 2;
+          }
+        }
+        return {
+          alignedRef: reference,
+          alignedRead: sequence,
+          score,
+          orientation,
+          refStartOffset: 0,
+          identity: reference.length ? matches / reference.length : 0
+        };
+      }
+
+      function needlemanSemiGlobal(reference, sequence, orientation) {
+        const n = reference.length;
+        const m = sequence.length;
+        const width = m + 1;
+        const total = (n + 1) * (m + 1);
+        const score = new Int32Array(total);
+        const trace = new Uint8Array(total);
+        const gap = -3;
+        const match = 2;
+        const mismatch = -2;
+        const idx = (i, j) => i * width + j;
+
+        for (let i = 1; i <= n; i += 1) {
+          score[idx(i, 0)] = 0;
+          trace[idx(i, 0)] = 1;
+        }
+        for (let j = 1; j <= m; j += 1) {
+          score[idx(0, j)] = 0;
+          trace[idx(0, j)] = 2;
+        }
+
+        for (let i = 1; i <= n; i += 1) {
+          for (let j = 1; j <= m; j += 1) {
+            const diagonal = score[idx(i - 1, j - 1)] + (reference[i - 1] === sequence[j - 1] ? match : mismatch);
+            const up = score[idx(i - 1, j)] + gap;
+            const left = score[idx(i, j - 1)] + gap;
+            let best = diagonal;
+            let direction = 0;
+            if (up > best) {
+              best = up;
+              direction = 1;
+            }
+            if (left > best) {
+              best = left;
+              direction = 2;
+            }
+            score[idx(i, j)] = best;
+            trace[idx(i, j)] = direction;
+          }
+        }
+
+        let bestI = n;
+        let bestJ = m;
+        let bestScore = -2147483648;
+        for (let j = 0; j <= m; j += 1) {
+          const value = score[idx(n, j)];
+          if (value > bestScore) {
+            bestScore = value;
+            bestI = n;
+            bestJ = j;
+          }
+        }
+        for (let i = 0; i <= n; i += 1) {
+          const value = score[idx(i, m)];
+          if (value > bestScore) {
+            bestScore = value;
+            bestI = i;
+            bestJ = m;
+          }
+        }
+
+        const refOut = [];
+        const readOut = [];
+        let i = bestI;
+        let j = bestJ;
+        while (i > 0 && j > 0) {
+          const direction = trace[idx(i, j)];
+          if (direction === 0) {
+            refOut.push(reference[i - 1]);
+            readOut.push(sequence[j - 1]);
+            i -= 1;
+            j -= 1;
+          } else if (direction === 1) {
+            refOut.push(reference[i - 1]);
+            readOut.push('-');
+            i -= 1;
+          } else {
+            refOut.push('-');
+            readOut.push(sequence[j - 1]);
+            j -= 1;
+          }
+        }
+
+        refOut.reverse();
+        readOut.reverse();
+        const alignedRef = refOut.join('');
+        const alignedRead = readOut.join('');
+        let matches = 0;
+        let refBases = 0;
+        for (let k = 0; k < alignedRef.length; k += 1) {
+          if (alignedRef[k] !== '-') {
+            refBases += 1;
+            if (alignedRef[k] === alignedRead[k]) matches += 1;
+          }
+        }
+
+        return {
+          alignedRef,
+          alignedRead,
+          score: bestScore,
+          orientation,
+          refStartOffset: i,
+          identity: refBases ? matches / refBases : 0
+        };
+      }
+
+      function collectEdits(alignment) {
+        const items = [];
+        let refPos = alignment.refStartOffset || 0;
+        let mismatchCount = 0;
+        let insertionCount = 0;
+        let deletionCount = 0;
+        let coveredStart = 0;
+        let coveredEnd = 0;
+        let coveredStartColumn = -1;
+        let coveredEndColumn = -1;
+
+        for (let i = 0; i < alignment.alignedRef.length; i += 1) {
+          const refBase = alignment.alignedRef[i];
+          const readBase = alignment.alignedRead[i];
+          if (refBase !== '-') {
+            refPos += 1;
+            if (readBase !== '-') {
+              if (!coveredStart) coveredStart = refPos;
+              coveredEnd = refPos;
+              if (coveredStartColumn === -1) coveredStartColumn = i;
+              coveredEndColumn = i;
+            }
+          }
+        }
+
+        refPos = alignment.refStartOffset || 0;
+
+        for (let i = 0; i < alignment.alignedRef.length; i += 1) {
+          const refBase = alignment.alignedRef[i];
+          const readBase = alignment.alignedRead[i];
+          if (refBase !== '-') refPos += 1;
+          const insideCoveredReference = coveredStart && coveredEnd && refPos >= coveredStart && refPos <= coveredEnd;
+
+          if (refBase !== '-' && readBase !== '-' && refBase !== readBase && insideCoveredReference) {
+            mismatchCount += 1;
+            items.push({ type: 'substitution', position: refPos, ref: refBase, alt: readBase });
+          } else if (refBase !== '-' && readBase === '-' && insideCoveredReference) {
+            deletionCount += 1;
+            items.push({ type: 'deletion', position: refPos, ref: refBase, alt: '-' });
+          } else if (refBase === '-' && readBase !== '-') {
+            const position = Math.max(1, refPos);
+            if (coveredStartColumn !== -1 && i > coveredStartColumn && i < coveredEndColumn) {
+              insertionCount += 1;
+              items.push({ type: 'insertion', position, ref: '+', alt: readBase });
+            }
+          }
+        }
+
+        const signature = items.slice(0, 12).map((edit) => {
+          if (edit.type === 'substitution') return `${edit.ref}${edit.position}${edit.alt}`;
+          if (edit.type === 'deletion') return `del${edit.position}`;
+          return `ins${edit.position}${edit.alt}`;
+        }).join('; ');
+        const overflow = items.length > 12 ? `; +${items.length - 12} more` : '';
+
+        return {
+          items,
+          mismatchCount,
+          insertionCount,
+          deletionCount,
+          hasIndel: insertionCount + deletionCount > 0,
+          hasAnyEdit: items.length > 0,
+          signature: signature ? signature + overflow : '',
+          coveredStart,
+          coveredEnd
+        };
+      }
+
+      function reverseComplement(sequence) {
+        const map = { A: 'T', C: 'G', G: 'C', T: 'A', N: 'N' };
+        let out = '';
+        for (let i = sequence.length - 1; i >= 0; i -= 1) out += map[sequence[i]] || 'N';
+        return out;
+      }
+
+      function buildSiteResult(samples, siteConfig) {
+        const rows = [];
+        const alleles = [];
+        const qcRows = [];
+        for (const sample of samples) {
+          const label = labelFor(sample.sample);
+          for (const row of sample.positionRows) rows.push({ ...row, site: siteConfig.siteName, siteId: siteConfig.siteId, label });
+          for (const allele of sample.alleles) alleles.push({ ...allele, site: siteConfig.siteName, siteId: siteConfig.siteId, label });
+          qcRows.push({ site: siteConfig.siteName, siteId: siteConfig.siteId, sample: sample.sample, label, ...sample.qc, files: sample.files.join('; '), warnings: sample.warnings.join('; ') });
+        }
+        return {
+          siteId: siteConfig.siteId,
+          siteName: siteConfig.siteName,
+          reference: siteConfig.reference,
+          settings: siteConfig.settings,
+          samples,
+          mutationRows: rows,
+          alleleRows: alleles,
+          qcRows,
+          maxPercent: Math.max(0, ...samples.map((sample) => sample.maxPercent))
+        };
+      }
+
+      function buildRunResult(sites) {
+        const first = sites[0] || { reference: '', settings: {}, samples: [], mutationRows: [], alleleRows: [], qcRows: [] };
+        return {
+          createdAt: new Date(),
+          runName: els.runName.value || 'Amplicon analysis run',
+          reference: first.reference,
+          settings: first.settings,
+          samples: first.samples,
+          mutationRows: sites.flatMap((site) => site.mutationRows),
+          alleleRows: sites.flatMap((site) => site.alleleRows),
+          qcRows: sites.flatMap((site) => site.qcRows),
+          sites
+        };
+      }
+
+      function currentSite() {
+        const run = state.results;
+        if (!run) return null;
+        if (!run.sites || !run.sites.length) return run;
+        return run.sites.find((site) => site.siteId === state.selectedSiteId) || run.sites[0];
+      }
+
+      function syncSiteSelect() {
+        if (!els.siteSelect) return;
+        const run = state.results;
+        if (!run || !run.sites || run.sites.length <= 1) {
+          if (els.sitePicker) els.sitePicker.style.display = 'none';
+          els.siteSelect.style.display = 'none';
+          els.siteSelect.innerHTML = '';
+          return;
+        }
+        if (els.sitePicker) els.sitePicker.style.display = '';
+        els.siteSelect.style.display = '';
+        els.siteSelect.innerHTML = run.sites.map((site) => `<option value="${escapeHtml(site.siteId)}" ${site.siteId === currentSite().siteId ? 'selected' : ''}>${escapeHtml(site.siteName)}</option>`).join('');
+      }
+
+      function labelFor(sample) {
+        const custom = state.labels.get(sample);
+        return custom && custom.trim() ? custom.trim() : sample;
+      }
+
+      function yieldToBrowser() {
+        return new Promise((resolve) => setTimeout(resolve, 0));
+      }
+
+      function renderSummary() {
+        const run = state.results;
+        syncSiteSelect();
+        if (!run) {
+          $('metricSamples').textContent = state.files.length ? String(groupFiles(state.files).length) : '0';
+          $('metricSamplesHint').textContent = 'FASTQ sample groups';
+          $('metricPassed').textContent = '0';
+          $('metricDepth').textContent = '0';
+          $('metricMax').textContent = '0.0';
+          $('metricWarn').textContent = '0';
+          return;
+        }
+        const site = currentSite();
+        const aligned = site.samples.reduce((sum, sample) => sum + sample.qc.alignedReads, 0);
+        const depths = site.samples.map((sample) => sample.qc.alignedReads).sort((a, b) => a - b);
+        const warnings = site.samples.reduce((sum, sample) => sum + sample.warnings.length, 0);
+        $('metricSamples').textContent = `${formatInt(site.samples.length)} sample${site.samples.length === 1 ? '' : 's'}`;
+        $('metricSamplesHint').textContent = run.sites && run.sites.length > 1 ? `${formatInt(run.sites.length)} sites in run` : 'selected site';
+        $('metricPassed').textContent = formatInt(aligned);
+        $('metricDepth').textContent = formatInt(depths.length ? depths[Math.floor(depths.length / 2)] : 0);
+        $('metricMax').textContent = formatPct(Math.max(0, ...site.samples.map((sample) => sample.maxPercent)), 1);
+        $('metricWarn').textContent = String(warnings);
+      }
+
+      function renderFigure() {
+        syncSiteSelect();
+        const svg = buildSvgFigure();
+        if (!svg) {
+          els.figureWrap.innerHTML = `
+            <div class="empty">
+              <strong>Load FASTQ files to generate the figure</strong>
+              <p>Confirm the reference sequence, add FASTQ files, then click Run analysis.</p>
+            </div>
+          `;
+          els.figureSubtitle.textContent = 'Upload FASTQ files or load the demo dataset to generate a figure.';
+          els.exportBadge.textContent = 'waiting';
+          els.exportBadge.className = 'badge';
+          return;
+        }
+        els.figureWrap.innerHTML = svg;
+        const site = currentSite();
+        const modeText = getSignalLabel(site.settings.signalMode);
+        els.figureSubtitle.textContent = `${site.siteName} - ${modeText} - ${site.samples.length} samples - ${site.reference.length} bp reference - ${site.settings.targetSource}`;
+      }
+
+      function buildSvgFigure() {
+        const run = state.results;
+        const site = currentSite();
+        if (!run || !site || !site.samples.length || !site.reference.length) return '';
+        const settings = site.settings;
+        const targets = settings.targets;
+        const samples = site.samples.slice();
+        if (state.sortByMax) samples.sort((a, b) => b.maxPercent - a.maxPercent);
+
+        const cols = Array.from({ length: site.reference.length }, (_, idx) => ({ position: idx + 1, refBase: site.reference[idx] }));
+        const panels = splitPanels(samples);
+        const compact = panels.length > 1 || samples.length > 26;
+        const cellW = compact ? (cols.length > 90 ? 7 : cols.length > 62 ? 9 : 12) : (cols.length > 90 ? 10 : 15);
+        const rowH = compact ? 15 : 20;
+        const left = compact ? 116 : 154;
+        const right = 72;
+        const top = 44;
+        const bottom = 72;
+        const gap = compact ? 24 : 0;
+        const panelW = left + cols.length * cellW + right;
+        const maxRows = Math.max(...panels.map((panel) => panel.length));
+        const width = Math.max(820, panels.length * panelW + (panels.length - 1) * gap);
+        const height = top + maxRows * rowH + bottom;
+        const signalLabel = getSignalLabel(settings.signalMode);
+
+        let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="Amplicon mutation heatmap">`;
+        svg += '<rect width="100%" height="100%" fill="#ffffff"/>';
+        svg += '<style>.title{font:700 13px Arial,sans-serif;fill:#18212b}.axis{font:10px Arial,sans-serif;fill:#4c5b68}.row{font:11px Arial,sans-serif;fill:#18212b}.tiny{font:9px Arial,sans-serif;fill:#687786}.warn{fill:#aa6b00}</style>';
+        svg += `<text x="14" y="20" class="title">${escapeHtml(`${state.results.runName} - ${site.siteName}`)}</text>`;
+        svg += `<text x="14" y="36" class="axis">${escapeHtml(signalLabel)} - generated ${escapeHtml(formatTimestamp(state.results.createdAt))}</text>`;
+
+        panels.forEach((panel, panelIndex) => {
+          const ox = panelIndex * (panelW + gap);
+          cols.forEach((col, idx) => {
+            const showTick = col.position === 1 || col.position === cols.length || col.position % 10 === 0 || targets.has(col.position);
+            if (!showTick) return;
+            const x = ox + left + idx * cellW + cellW / 2;
+            const y = targets.has(col.position) ? 34 : 30;
+            svg += `<text x="${x}" y="${y}" text-anchor="middle" class="${targets.has(col.position) ? 'warn' : 'axis'}">${col.position}</text>`;
+          });
+
+          panel.forEach((sample, rowIndex) => {
+            const y = top + rowIndex * rowH;
+            const label = labelFor(sample.sample);
+            const low = sample.qc.passedReads < settings.minDepth;
+            svg += `<text x="${ox + left - 8}" y="${y + rowH * .72}" text-anchor="end" class="row">${escapeHtml(clip(label, compact ? 18 : 27))}</text>`;
+            sample.positionRows.forEach((row, colIndex) => {
+              const x = ox + left + colIndex * cellW;
+              const target = targets.has(row.position);
+              const fill = low ? '#e1e6ec' : heatColor(row.percent);
+              svg += `<rect x="${x}" y="${y}" width="${Math.max(3, cellW - 1)}" height="${rowH - 1}" fill="${fill}" stroke="${target ? '#b42318' : '#ffffff'}" stroke-width="${target ? 1.5 : .6}"><title>${escapeHtml(label)} position ${row.position}: ${formatPct(row.percent, 2)}%</title></rect>`;
+            });
+            svg += `<text x="${ox + left + cols.length * cellW + 8}" y="${y + rowH * .72}" class="axis">${formatPct(sample.maxPercent, 1)}%</text>`;
+          });
+        });
+
+        svg += buildLegend(left, height - 42);
+        svg += '</svg>';
+        return svg;
+      }
+
+      function splitPanels(samples) {
+        if (samples.length <= 32) return [samples];
+        const panelCount = Math.min(4, Math.ceil(samples.length / 28));
+        const perPanel = Math.ceil(samples.length / panelCount);
+        const panels = [];
+        for (let start = 0; start < samples.length; start += perPanel) panels.push(samples.slice(start, start + perPanel));
+        return panels;
+      }
+
+      function heatColor(percent) {
+        if (percent >= 50) return '#0f4c81';
+        if (percent >= 25) return '#3a8ac6';
+        if (percent >= 10) return '#8fc4ee';
+        if (percent >= 2) return '#d7e9fb';
+        return '#f8fbff';
+      }
+
+      function buildLegend(x, y) {
+        const values = [0, 2, 10, 25, 50];
+        let svg = `<g><text x="${x}" y="${y - 10}" class="axis">edit percentage</text>`;
+        values.forEach((value, idx) => {
+          svg += `<rect x="${x + idx * 50}" y="${y}" width="40" height="12" fill="${heatColor(value)}" stroke="#d8e1ea"/>`;
+          svg += `<text x="${x + idx * 50}" y="${y + 29}" class="tiny">${value}%</text>`;
+        });
+        svg += '<text x="14" y="' + (y + 29) + '" class="tiny">Red outline: target position - gray row: below minimum reads</text>';
+        svg += '</g>';
+        return svg;
+      }
+
+      function getSignalLabel(mode) {
+        if (mode === 'substitution') return 'Substitution-only edit rate';
+        if (mode === 'indel') return 'Indel-only edit rate';
+        return 'Substitution + indel edit rate';
+      }
+
+      function renderTab() {
+        document.querySelectorAll('.tab').forEach((tab) => tab.classList.toggle('active', tab.dataset.tab === state.activeTab));
+        if (!state.results) {
+          els.tabBody.innerHTML = `
+            <div class="empty">
+              <strong>No results yet</strong>
+              <p>Load the demo dataset or add FASTQ files, then run the analysis.</p>
+            </div>
+          `;
+          return;
+        }
+        if (state.activeTab === 'overview') renderOverviewTab();
+        else if (state.activeTab === 'qc') renderQcTab();
+        else if (state.activeTab === 'mutation') renderMutationTab();
+        else if (state.activeTab === 'alleles') renderAlleleTab();
+        else if (state.activeTab === 'samples') renderSamplesTab();
+        else renderExportTab();
+      }
+
+      function renderOverviewTab() {
+        const run = state.results;
+        const site = currentSite();
+        const settings = site.settings;
+        const expectedSummary = buildExpectedEditSummary(site);
+        const expectedRows = expectedSummary ? expectedSummary.rows.map((row) => `
+          <tr>
+            <td>${escapeHtml(row.sample)}</td>
+            <td>${formatInt(row.expectedReads)}</td>
+            <td>${formatInt(row.denominator)}</td>
+            <td>${formatPct(row.percent, 3)}%</td>
+            <td>${escapeHtml(row.topPosition ? `${row.topPosition.position} ${row.topPosition.refBase}, ${formatPct(row.topPosition.expectedEditPercent, 3)}%` : 'none')}</td>
+          </tr>
+        `).join('') : '';
+        const siteRows = run.sites && run.sites.length > 1 ? run.sites.map((item) => {
+          const passed = item.samples.reduce((sum, sample) => sum + sample.qc.passedReads, 0);
+          const aligned = item.samples.reduce((sum, sample) => sum + sample.qc.alignedReads, 0);
+          const warnings = item.samples.reduce((sum, sample) => sum + sample.warnings.length, 0);
+          return `
+            <tr>
+              <td><strong>${escapeHtml(item.siteName)}</strong></td>
+              <td>${formatInt(item.reference.length)} bp</td>
+              <td>${formatInt(item.samples.length)}</td>
+              <td>${formatInt(passed)}</td>
+              <td>${formatInt(aligned)}</td>
+              <td>${formatPct(item.maxPercent, 2)}%</td>
+              <td>${warnings ? `<span class="badge warn">${warnings} warning(s)</span>` : '<span class="badge good">OK</span>'}</td>
+            </tr>
+          `;
+        }).join('') : '';
+        const rows = site.samples.map((sample) => {
+          const warnBadge = sample.warnings.length ? `<span class="badge warn">${escapeHtml(sample.warnings.join(', '))}</span>` : '<span class="badge good">OK</span>';
+          return `
+            <tr>
+              <td><strong>${escapeHtml(labelFor(sample.sample))}</strong><br><span class="mono">${escapeHtml(sample.files.join(', '))}</span></td>
+              <td>${formatInt(sample.qc.passedReads)}<div class="bar"><i style="width:${Math.min(100, sample.qc.passedReads / Math.max(1, maxDepth(site.samples)) * 100)}%"></i></div></td>
+              <td>${formatInt(sample.qc.alignedReads)}</td>
+              <td>${formatInt(sample.qc.uniqueReads)}</td>
+              <td>${formatPct(sample.qc.meanQuality, 1)}</td>
+              <td>${formatPct(sample.qc.meanIdentity * 100, 1)}%</td>
+              <td>${formatPct(sample.maxPercent, 2)}%</td>
+              <td>${warnBadge}</td>
+            </tr>
+          `;
+        }).join('');
+        els.tabBody.innerHTML = `
+          <div class="quality-grid">
+            <div class="mini"><span>Displayed site</span><strong>${escapeHtml(site.siteName)}</strong></div>
+            <div class="mini"><span>Reference length</span><strong>${formatInt(site.reference.length)} bp</strong></div>
+            <div class="mini"><span>Signal</span><strong>${escapeHtml(getSignalLabel(settings.signalMode))}</strong></div>
+            <div class="mini"><span>Target positions</span><strong>${escapeHtml(Array.from(settings.targets).sort((a, b) => a - b).join(', ') || 'none')}</strong></div>
+            <div class="mini"><span>Target source</span><strong>${escapeHtml(settings.targetSource)}</strong></div>
+          </div>
+          ${siteRows ? `
+          <div class="table-scroll" style="margin-bottom:12px">
+            <table>
+              <thead><tr><th>site</th><th>reference</th><th>samples</th><th>QC-passed reads</th><th>alignment-passed reads</th><th>max edit</th><th>status</th></tr></thead>
+              <tbody>${siteRows}</tbody>
+            </table>
+          </div>` : ''}
+          ${expectedSummary ? `
+          <div class="table-scroll" style="margin-bottom:12px">
+            <table>
+              <thead><tr><th colspan="5">Expected edit summary (${escapeHtml(expectedSummary.label)})</th></tr><tr><th>sample</th><th>expected reads</th><th>covered target reads</th><th>target-window rate</th><th>top expected site</th></tr></thead>
+              <tbody>${expectedRows}</tbody>
+            </table>
+          </div>` : ''}
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>sample</th><th>QC-passed reads</th><th>alignment-passed reads</th><th>unique reads</th><th>mean Q</th><th>mean identity</th><th>max edit</th><th>status</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        `;
+      }
+
+      function maxDepth(samples) {
+        return Math.max(1, ...samples.map((sample) => sample.qc.passedReads));
+      }
+
+      function buildExpectedEditSummary(site) {
+        const expected = site.settings.expectedEdit;
+        if (!expected) return null;
+        const targets = site.settings.targets;
+        const rows = site.samples.map((sample) => {
+          const targetRows = sample.positionRows.filter((row) => targets.has(row.position) && row.refBase === expected.from);
+          const expectedReads = targetRows.reduce((sum, row) => sum + row.expectedEditReads, 0);
+          const denominator = targetRows.reduce((sum, row) => sum + row.denominator, 0);
+          const topPosition = targetRows.slice().sort((a, b) => b.expectedEditPercent - a.expectedEditPercent)[0] || null;
+          return {
+            sample: labelFor(sample.sample),
+            expectedReads,
+            denominator,
+            percent: denominator ? expectedReads / denominator * 100 : 0,
+            topPosition
+          };
+        });
+        return { label: expected.label, rows };
+      }
+
+      function renderQcTab() {
+        const site = currentSite();
+        const rows = site.samples.map((sample) => `
+          <tr>
+            <td><strong>${escapeHtml(labelFor(sample.sample))}</strong></td>
+            <td>${formatInt(sample.qc.estimatedRecords)}</td>
+            <td>${formatInt(sample.qc.parsedRecords)}</td>
+            <td>${formatInt(sample.qc.passedReads)}</td>
+            <td>${formatInt(sample.qc.alignedReads)}</td>
+            <td>${formatInt(sample.qc.lowIdentityReads)}</td>
+            <td>${formatInt(sample.qc.droppedQuality)}</td>
+            <td>${formatInt(sample.qc.droppedShort)}</td>
+            <td>${formatInt(sample.qc.droppedN)}</td>
+            <td>${formatInt(sample.qc.malformedRecords)}</td>
+            <td>${formatInt(sample.qc.noIndelReads)}</td>
+            <td>${sample.qc.readLimitReached ? '<span class="badge warn">limited</span>' : '<span class="badge good">full</span>'}</td>
+          </tr>
+        `).join('');
+        els.tabBody.innerHTML = `
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>sample</th><th>estimated</th><th>parsed</th><th>QC-passed</th><th>alignment-passed</th><th>low-identity excluded</th><th>low Q</th><th>short</th><th>N base</th><th>malformed</th><th>no-indel</th><th>limit</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        `;
+      }
+
+      function renderMutationTab() {
+        const site = currentSite();
+        const rows = site.mutationRows.slice(0, 1200).map((row) => `
+          <tr>
+            <td>${escapeHtml(row.label)}</td>
+            <td>${row.position}</td>
+            <td>${escapeHtml(row.refBase)}</td>
+            <td>${formatInt(row.substitutionReads)}</td>
+            <td>${formatInt(row.deletionReads)}</td>
+            <td>${formatInt(row.insertionReads)}</td>
+            <td>${formatInt(row.displayReads)}</td>
+            <td>${formatPct(row.percent, 3)}%</td>
+            <td>${formatInt(row.expectedEditReads)}</td>
+            <td>${formatPct(row.expectedEditPercent, 3)}%</td>
+          </tr>
+        `).join('');
+        els.tabBody.innerHTML = `
+          <p class="hint" style="margin-bottom:8px">The preview is limited to 1,200 rows. Export Position-level CSV for the full table.</p>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>sample</th><th>position</th><th>ref</th><th>sub</th><th>del</th><th>ins</th><th>signal reads</th><th>percent</th><th>expected reads</th><th>expected %</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        `;
+      }
+
+      function renderAlleleTab() {
+        const site = currentSite();
+        const samples = site.samples;
+        if (!state.selectedSample || !samples.some((sample) => sample.sample === state.selectedSample)) {
+          state.selectedSample = samples[0] ? samples[0].sample : '';
+        }
+        const current = samples.find((sample) => sample.sample === state.selectedSample);
+        const options = samples.map((sample) => `<option value="${escapeHtml(sample.sample)}" ${sample.sample === state.selectedSample ? 'selected' : ''}>${escapeHtml(labelFor(sample.sample))}</option>`).join('');
+        const rows = current ? current.alleles.slice(0, 120).map((row) => `
+          <tr>
+            <td class="mono">${escapeHtml(clip(row.sequence, 90))}</td>
+            <td>${formatInt(row.nReads)}<div class="bar"><i style="width:${Math.min(100, row.ratio * 100)}%"></i></div></td>
+            <td>${formatPct(row.ratio * 100, 2)}%</td>
+            <td>${escapeHtml(row.orientation)}</td>
+            <td>${formatPct(row.identity * 100, 1)}%</td>
+            <td>${escapeHtml(row.editSignature)}</td>
+          </tr>
+        `).join('') : '';
+        els.tabBody.innerHTML = `
+          <div class="field" style="max-width:360px;margin-top:0">
+            <label for="alleleSampleSelect">Sample</label>
+            <select id="alleleSampleSelect">${options}</select>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>read sequence</th><th>n reads</th><th>ratio</th><th>orientation</th><th>identity</th><th>edit signature</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        `;
+        const select = $('alleleSampleSelect');
+        if (select) {
+          select.onchange = (event) => {
+            state.selectedSample = event.target.value;
+            renderAlleleTab();
+          };
+        }
+      }
+
+      function renderSamplesTab() {
+        const site = currentSite();
+        const rows = site.samples.map((sample) => `
+          <div class="sample-editor">
+            <div>
+              <strong>${escapeHtml(sample.sample)}</strong>
+              <small>${formatInt(sample.qc.alignedReads)} alignment-passed reads - max ${formatPct(sample.maxPercent, 1)}%</small>
+            </div>
+            <input data-label-sample="${escapeHtml(sample.sample)}" value="${escapeHtml(labelFor(sample.sample))}" aria-label="Label for ${escapeHtml(sample.sample)}">
+          </div>
+        `).join('');
+        els.tabBody.innerHTML = `
+          <p class="hint" style="margin-bottom:10px">Sample labels shown in figures and exports. Original FASTQ filenames are not modified.</p>
+          <div class="sample-list">${rows}</div>
+        `;
+      }
+
+      function renderExportTab() {
+        els.tabBody.innerHTML = `
+          <div class="export-grid">
+            <button class="btn green" data-export="svg" type="button">Figure SVG</button>
+            <button class="btn green" data-export="png" type="button">Figure PNG</button>
+            <button class="btn" data-export="mutation" type="button">Position-level CSV</button>
+            <button class="btn" data-export="allele" type="button">Allele-spectrum CSV</button>
+            <button class="btn" data-export="qc" type="button">QC CSV</button>
+            <button class="btn" data-export="report" type="button">Methods + QC report</button>
+            <button class="btn" data-export="html-report" type="button">HTML report</button>
+          </div>
+          <p class="hint">Figure exports use the displayed site. CSV and report exports include all analyzed sites.</p>
+        `;
+      }
+
+      function buildMutationCsv() {
+        const header = ['site', 'sample', 'label', 'position', 'ref_base', 'substitution_reads', 'deletion_reads', 'insertion_reads', 'signal_reads', 'denominator', 'percent', 'expected_edit_reads', 'expected_edit_percent', 'A', 'C', 'G', 'T', 'N'];
+        const rows = state.results.mutationRows.map((row) => [
+          row.site,
+          row.sample,
+          labelFor(row.sample),
+          row.position,
+          row.refBase,
+          row.substitutionReads,
+          row.deletionReads,
+          row.insertionReads,
+          row.displayReads,
+          row.denominator,
+          row.percent,
+          row.expectedEditReads,
+          row.expectedEditPercent,
+          row.A,
+          row.C,
+          row.G,
+          row.T,
+          row.N
+        ]);
+        return toCsv(header, rows);
+      }
+
+      function buildAlleleCsv() {
+        const header = ['site', 'sample', 'label', 'sequence', 'n_reads', 'ratio', 'orientation', 'identity', 'edit_signature', 'mismatch_count', 'insertion_count', 'deletion_count', 'has_indel'];
+        const rows = state.results.alleleRows.map((row) => [
+          row.site,
+          row.sample,
+          labelFor(row.sample),
+          row.sequence,
+          row.nReads,
+          row.ratio,
+          row.orientation,
+          row.identity,
+          row.editSignature,
+          row.mismatchCount,
+          row.insertionCount,
+          row.deletionCount,
+          row.hasIndel
+        ]);
+        return toCsv(header, rows);
+      }
+
+      function buildQcCsv() {
+        const header = ['site', 'sample', 'label', 'files', 'estimated_records', 'parsed_records', 'passed_reads', 'aligned_reads', 'low_identity_reads', 'no_indel_reads', 'edited_reads', 'unique_reads', 'mean_quality', 'mean_identity', 'dropped_short', 'dropped_quality', 'dropped_n', 'malformed_records', 'read_limit_reached', 'warnings'];
+        const rows = state.results.qcRows.map((row) => [
+          row.site,
+          row.sample,
+          labelFor(row.sample),
+          row.files,
+          row.estimatedRecords,
+          row.parsedRecords,
+          row.passedReads,
+          row.alignedReads,
+          row.lowIdentityReads,
+          row.noIndelReads,
+          row.editedReads,
+          row.uniqueReads,
+          row.meanQuality,
+          row.meanIdentity,
+          row.droppedShort,
+          row.droppedQuality,
+          row.droppedN,
+          row.malformedRecords,
+          row.readLimitReached,
+          row.warnings
+        ]);
+        return toCsv(header, rows);
+      }
+
+      function toCsv(header, rows) {
+        const encode = (value) => `"${String(value == null ? '' : value).replace(/"/g, '""')}"`;
+        return [header.map(encode).join(','), ...rows.map((row) => row.map(encode).join(','))].join('\n');
+      }
+
+      function buildReport() {
+        const run = state.results;
+        const activeSite = currentSite();
+        const settings = activeSite.settings;
+        const totalPassed = run.qcRows.reduce((sum, row) => sum + row.passedReads, 0);
+        const totalAligned = run.qcRows.reduce((sum, row) => sum + row.alignedReads, 0);
+        const maxEdit = Math.max(0, ...run.sites.map((site) => site.maxPercent));
+        const siteSummaryRows = run.sites.map((site) => {
+          const passed = site.samples.reduce((sum, sample) => sum + sample.qc.passedReads, 0);
+          const aligned = site.samples.reduce((sum, sample) => sum + sample.qc.alignedReads, 0);
+          return `| ${site.siteName} | ${site.reference.length} | ${site.samples.length} | ${passed} | ${aligned} | ${formatPct(site.maxPercent, 3)}% | ${Array.from(site.settings.targets).sort((a, b) => a - b).join(', ') || 'none'} |`;
+        });
+        const expectedSummaryRows = run.sites.flatMap((site) => {
+          const summary = buildExpectedEditSummary(site);
+          if (!summary) return [];
+          return summary.rows.map((row) => `| ${site.siteName} | ${row.sample} | ${summary.label} | ${row.expectedReads} | ${row.denominator} | ${formatPct(row.percent, 3)}% | ${row.topPosition ? `${row.topPosition.position} ${row.topPosition.refBase}, ${formatPct(row.topPosition.expectedEditPercent, 3)}%` : 'none'} |`);
+        });
+        const sampleRows = run.sites.flatMap((site) => site.samples.map((sample) => `| ${site.siteName} | ${sample.sample} | ${labelFor(sample.sample)} | ${sample.qc.passedReads} | ${sample.qc.alignedReads} | ${sample.qc.lowIdentityReads} | ${sample.qc.uniqueReads} | ${formatPct(sample.qc.meanQuality, 2)} | ${formatPct(sample.qc.meanIdentity * 100, 2)}% | ${formatPct(sample.maxPercent, 3)}% | ${sample.warnings.join('; ') || 'OK'} |`));
+        return [
+          `# ${run.runName}`,
+          '',
+          `- Created: ${formatTimestamp(run.createdAt)}`,
+          `- Sites: ${run.sites.length}`,
+          `- Sample-site analyses: ${run.qcRows.length}`,
+          `- QC-passed reads across site analyses: ${totalPassed}`,
+          `- Alignment-passed reads across site analyses: ${totalAligned}`,
+          `- Edit signal shown in heatmap: ${getSignalLabel(settings.signalMode)}`,
+          `- Displayed site at export: ${activeSite.siteName}`,
+          `- Minimum mean Q: ${settings.minQ}`,
+          `- Minimum read length: ${settings.minLen}`,
+          `- Minimum alignment identity: ${formatPct(settings.minIdentity * 100, 1)}%`,
+          `- Max edit percentage: ${formatPct(maxEdit, 3)}%`,
+          '',
+          '## Site Summary',
+          '',
+          '| site | reference bp | samples | QC-passed reads | alignment-passed reads | max edit % | target positions |',
+          '| --- | ---: | ---: | ---: | ---: | ---: | --- |',
+          ...siteSummaryRows,
+          '',
+          ...(expectedSummaryRows.length ? [
+            '## Expected Edit Summary',
+            '',
+            '| site | sample | model | expected reads | covered target reads | target-window rate | top expected site |',
+            '| --- | --- | --- | ---: | ---: | ---: | --- |',
+            ...expectedSummaryRows,
+            ''
+          ] : []),
+          '## Sample Summary',
+          '',
+          '| site | sample | label | QC-passed reads | alignment-passed reads | low-identity excluded | unique reads | mean Q | mean identity | max edit % | warnings |',
+          '| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |',
+          ...sampleRows,
+          '',
+          '## Notes',
+          '',
+          `- FASTQ records were parsed, QC-filtered, aligned in both orientations, filtered at ${formatPct(settings.minIdentity * 100, 1)}% minimum alignment identity, and summarized from the selected files.`,
+          '- Edit percentages use position-level covered reads as the denominator; terminal no-coverage gaps are not counted as deletion edits.',
+          '- Paired FASTQ files are grouped by sample name; reads are aligned independently against the reference and reverse-complement orientation is tested.',
+          '- Current limitation: paired-end consensus merging is not performed.'
+        ].join('\n');
+      }
+
+      function buildHtmlReport() {
+        const run = state.results;
+        const activeSite = currentSite();
+        const settings = activeSite.settings;
+        const totalPassed = run.qcRows.reduce((sum, row) => sum + row.passedReads, 0);
+        const totalAligned = run.qcRows.reduce((sum, row) => sum + row.alignedReads, 0);
+        const maxEdit = Math.max(0, ...run.sites.map((site) => site.maxPercent));
+        const siteSummaryRows = run.sites.map((site) => {
+          const passed = site.samples.reduce((sum, sample) => sum + sample.qc.passedReads, 0);
+          const aligned = site.samples.reduce((sum, sample) => sum + sample.qc.alignedReads, 0);
+          const targets = Array.from(site.settings.targets).sort((a, b) => a - b).join(', ') || 'none';
+          return htmlRow([
+            site.siteName,
+            `${formatInt(site.reference.length)} bp`,
+            formatInt(site.samples.length),
+            formatInt(passed),
+            formatInt(aligned),
+            `${formatPct(site.maxPercent, 3)}%`,
+            targets
+          ]);
+        }).join('');
+        const expectedSummaryRows = run.sites.flatMap((site) => {
+          const summary = buildExpectedEditSummary(site);
+          if (!summary) return [];
+          return summary.rows.map((row) => htmlRow([
+            site.siteName,
+            row.sample,
+            summary.label,
+            formatInt(row.expectedReads),
+            formatInt(row.denominator),
+            `${formatPct(row.percent, 3)}%`,
+            row.topPosition ? `${row.topPosition.position} ${row.topPosition.refBase}, ${formatPct(row.topPosition.expectedEditPercent, 3)}%` : 'none'
+          ]));
+        }).join('');
+        const sampleRows = run.sites.flatMap((site) => site.samples.map((sample) => htmlRow([
+          site.siteName,
+          sample.sample,
+          labelFor(sample.sample),
+          formatInt(sample.qc.passedReads),
+          formatInt(sample.qc.alignedReads),
+          formatInt(sample.qc.lowIdentityReads),
+          formatInt(sample.qc.uniqueReads),
+          formatPct(sample.qc.meanQuality, 2),
+          `${formatPct(sample.qc.meanIdentity * 100, 2)}%`,
+          `${formatPct(sample.maxPercent, 3)}%`,
+          sample.warnings.join('; ') || 'OK'
+        ]))).join('');
+        const figureSvg = buildSvgFigure();
+        return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(run.runName)} - Amplicon Analyzer Report</title>
+  <style>
+    :root { color-scheme: light; --ink:#18212b; --muted:#5d6b78; --line:#d8e1ea; --paper:#f6f8fb; --panel:#fff; --accent:#0f6f8f; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--paper); color:var(--ink); font:14px/1.55 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; }
+    main { width:min(1180px, calc(100% - 32px)); margin:0 auto; padding:28px 0 44px; }
+    header { margin-bottom:16px; }
+    h1 { margin:0 0 6px; font-size:30px; line-height:1.15; }
+    h2 { margin:0 0 10px; font-size:18px; }
+    p { color:var(--muted); margin:0 0 10px; }
+    .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:10px; margin:16px 0; }
+    .metric, section { background:var(--panel); border:1px solid var(--line); border-radius:8px; box-shadow:0 12px 28px rgba(24,33,43,.07); }
+    .metric { padding:12px; }
+    .metric span { display:block; color:var(--muted); font-size:11px; font-weight:800; }
+    .metric strong { display:block; margin-top:3px; font-size:22px; }
+    section { padding:16px; margin-top:14px; overflow:auto; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th, td { border-bottom:1px solid var(--line); padding:8px; text-align:left; vertical-align:top; }
+    th { background:#f8fbfd; color:#263746; }
+    .figure svg { max-width:100%; height:auto; display:block; }
+    .note { border-left:4px solid var(--accent); background:#eef8fb; color:#275260; padding:10px 12px; border-radius:8px; }
+    @media print { body { background:#fff; } main { width:100%; padding:0; } section, .metric { box-shadow:none; break-inside:avoid; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>${escapeHtml(run.runName)}</h1>
+      <p>Generated by Amplicon Analyzer on ${escapeHtml(formatTimestamp(run.createdAt))}. Displayed figure site: ${escapeHtml(activeSite.siteName)}.</p>
+    </header>
+    <div class="grid">
+      <div class="metric"><span>Sites</span><strong>${formatInt(run.sites.length)}</strong></div>
+      <div class="metric"><span>Sample-site analyses</span><strong>${formatInt(run.qcRows.length)}</strong></div>
+      <div class="metric"><span>QC-passed reads</span><strong>${formatInt(totalPassed)}</strong></div>
+      <div class="metric"><span>Alignment-passed reads</span><strong>${formatInt(totalAligned)}</strong></div>
+      <div class="metric"><span>Max edit</span><strong>${formatPct(maxEdit, 2)}%</strong></div>
+      <div class="metric"><span>Signal</span><strong>${escapeHtml(getSignalLabel(settings.signalMode))}</strong></div>
+    </div>
+    <section class="figure">
+      <h2>Mutation Heatmap</h2>
+      ${figureSvg}
+    </section>
+    <section>
+      <h2>Site Summary</h2>
+      <table><thead><tr><th>site</th><th>reference</th><th>samples</th><th>QC-passed reads</th><th>alignment-passed reads</th><th>max edit</th><th>target positions</th></tr></thead><tbody>${siteSummaryRows}</tbody></table>
+    </section>
+    ${expectedSummaryRows ? `<section><h2>Expected Edit Summary</h2><table><thead><tr><th>site</th><th>sample</th><th>model</th><th>expected reads</th><th>covered target reads</th><th>target-window rate</th><th>top expected site</th></tr></thead><tbody>${expectedSummaryRows}</tbody></table></section>` : ''}
+    <section>
+      <h2>Sample Summary</h2>
+      <table><thead><tr><th>site</th><th>sample</th><th>label</th><th>QC-passed reads</th><th>alignment-passed reads</th><th>low-identity excluded</th><th>unique reads</th><th>mean Q</th><th>mean identity</th><th>max edit</th><th>warnings</th></tr></thead><tbody>${sampleRows}</tbody></table>
+    </section>
+    <section>
+      <h2>Methods Notes</h2>
+      <p class="note">FASTQ records were parsed, QC-filtered, unique-read aggregated, aligned in both orientations, filtered at ${formatPct(settings.minIdentity * 100, 1)}% minimum alignment identity, and summarized at 1-based amplicon coordinates. Edit percentages use position-level covered reads as the denominator; terminal no-coverage gaps are not counted as deletion edits.</p>
+      <p>Current limitations: paired-end files are grouped but not merged into consensus reads; adapter trimming is not performed.</p>
+    </section>
+  </main>
+</body>
+</html>`;
+      }
+
+      function htmlRow(values) {
+        return `<tr>${values.map((value) => `<td>${escapeHtml(value)}</td>`).join('')}</tr>`;
+      }
+
+      function download(name, text, type) {
+        const blob = new Blob([text], { type: type || 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = name;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 800);
+      }
+
+      function requireResults() {
+        if (state.results) return true;
+        addLog('No results are available for export. Run the analysis first.', 'warn');
+        return false;
+      }
+
+      function exportSvg() {
+        if (!requireResults()) return;
+        const svg = buildSvgFigure();
+        download('amplicon_mutation_heatmap.svg', svg, 'image/svg+xml;charset=utf-8');
+        setStep('export', ['setup', 'upload', 'process', 'results']);
+      }
+
+      function exportPng() {
+        if (!requireResults()) return;
+        const svg = buildSvgFigure();
+        const match = svg.match(/<svg[^>]*width="(\d+)"[^>]*height="(\d+)"/);
+        const width = match ? Number(match[1]) : 1200;
+        const height = match ? Number(match[2]) : 800;
+        const image = new Image();
+        const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        image.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = width * 2;
+          canvas.height = height * 2;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.scale(2, 2);
+          ctx.drawImage(image, 0, 0, width, height);
+          canvas.toBlob((png) => {
+            const pngUrl = URL.createObjectURL(png);
+            const anchor = document.createElement('a');
+            anchor.href = pngUrl;
+            anchor.download = 'amplicon_mutation_heatmap.png';
+            anchor.click();
+            setTimeout(() => {
+              URL.revokeObjectURL(pngUrl);
+              URL.revokeObjectURL(url);
+            }, 800);
+          }, 'image/png');
+          setStep('export', ['setup', 'upload', 'process', 'results']);
+        };
+        image.onerror = () => {
+          URL.revokeObjectURL(url);
+          addLog('PNG conversion failed. Export SVG and convert it with an external tool.', 'bad');
+        };
+        image.src = url;
+      }
+
+      function exportByKind(kind) {
+        if (!requireResults()) return;
+        if (kind === 'svg') exportSvg();
+        else if (kind === 'png') exportPng();
+        else if (kind === 'mutation') download('processed_mutation_table.csv', buildMutationCsv(), 'text/csv;charset=utf-8');
+        else if (kind === 'allele') download('allele_spectrum_table.csv', buildAlleleCsv(), 'text/csv;charset=utf-8');
+        else if (kind === 'qc') download('qc_read_counts.csv', buildQcCsv(), 'text/csv;charset=utf-8');
+        else if (kind === 'report') download('amplicon_run_report.md', buildReport(), 'text/markdown;charset=utf-8');
+        else if (kind === 'html-report') download('amplicon_run_report.html', buildHtmlReport(), 'text/html;charset=utf-8');
+        setStep('export', ['setup', 'upload', 'process', 'results']);
+      }
+
+      function createDemoFiles() {
+        const samples = [
+          { name: 'control_R1.fastq', edit16: 0.01, edit19: 0.01, indel: 0.005, reads: 260 },
+          { name: 'sample_A_R1.fastq', edit16: 0.42, edit19: 0.23, indel: 0.07, reads: 320 },
+          { name: 'sample_B_R1.fastq', edit16: 0.66, edit19: 0.48, indel: 0.12, reads: 320 },
+          { name: 'sample_C_R1.fastq', edit16: 0.21, edit19: 0.52, indel: 0.05, reads: 300 }
+        ];
+        return samples.map((sample) => new File([makeDemoFastq(sample)], sample.name, { type: 'text/plain' }));
+      }
+
+      function makeDemoFastq(sample) {
+        const lines = [];
+        for (let i = 0; i < sample.reads; i += 1) {
+          let seq = DEMO_REF;
+          const r1 = pseudoRandom(i + sample.name.length * 17);
+          const r2 = pseudoRandom(i * 3 + sample.name.length * 29);
+          const r3 = pseudoRandom(i * 7 + sample.name.length * 11);
+          if (r1 < sample.edit16) seq = replaceAt(seq, 15, seq[15] === 'A' ? 'G' : 'A');
+          if (r2 < sample.edit19) seq = replaceAt(seq, 18, seq[18] === 'C' ? 'T' : 'C');
+          if (r3 < sample.indel) seq = seq.slice(0, 22) + seq.slice(23);
+          if (pseudoRandom(i * 13 + 5) < 0.025) seq = replaceAt(seq, 34, seq[34] === 'G' ? 'A' : 'G');
+          const qual = 'I'.repeat(seq.length);
+          lines.push(`@${sample.name.replace(/\W/g, '_')}_${i}`, seq, '+', qual);
+        }
+        return lines.join('\n') + '\n';
+      }
+
+      function pseudoRandom(seed) {
+        const x = Math.sin(seed * 999.123) * 10000;
+        return x - Math.floor(x);
+      }
+
+      function replaceAt(value, idx, char) {
+        return value.slice(0, idx) + char + value.slice(idx + 1);
+      }
+
+      function clearRun() {
+        if (state.processing) return;
+        state.files = [];
+        state.results = null;
+        state.labels.clear();
+        state.selectedSample = '';
+        state.selectedSiteId = '';
+        state.sortByMax = false;
+        state.log = [];
+        els.referenceSeq.value = DEMO_REF;
+        els.targets.value = '16,19';
+        els.siteManifest.value = '';
+        els.minDepth.value = '100';
+        els.minQ.value = '20';
+        els.minLen.value = '30';
+        els.readLimit.value = '50000';
+        els.minIdentity.value = '80';
+        els.signalMode.value = 'all';
+        els.expectedEdit.value = '';
+        els.assayType.value = 'custom';
+        renderAssayFields();
+        els.dropN.checked = true;
+        setRunBadge('ready', '');
+        setProgress(0, 'Add FASTQ files, then run the analysis.');
+        setStep('setup', []);
+        renderFiles();
+        renderSummary();
+        renderFigure();
+        renderTab();
+        renderLog();
+      }
+
+      function loadDemo() {
+        if (state.processing) return;
+        state.files = createDemoFiles();
+        state.results = null;
+        state.labels.clear();
+        state.selectedSample = '';
+        state.selectedSiteId = '';
+        state.sortByMax = false;
+        els.referenceSeq.value = DEMO_REF;
+        els.targets.value = '16,19,35';
+        els.siteManifest.value = '';
+        els.minDepth.value = '100';
+        els.minQ.value = '20';
+        els.minLen.value = '30';
+        els.readLimit.value = '50000';
+        els.minIdentity.value = '80';
+        els.signalMode.value = 'all';
+        els.expectedEdit.value = '';
+        els.assayType.value = 'custom';
+        renderAssayFields();
+        renderFiles();
+        renderSummary();
+        addLog('Demo FASTQ data loaded. Click Run analysis to generate the figure.', 'ok');
+        setStep('upload', ['setup']);
+      }
+
+      async function loadPublicBenchmark() {
+        if (state.processing) return;
+        try {
+          els.publicBenchmarkBtn.disabled = true;
+          addLog('Loading public benchmark FASTQ fixture.', 'info');
+          const response = await fetch(PUBLIC_BENCHMARK.fastqPath);
+          if (!response.ok) throw new Error(`Could not load ${PUBLIC_BENCHMARK.fastqPath}.`);
+          const buffer = await response.arrayBuffer();
+          const file = new File([buffer], 'emx1_base_editor.fastq.gz', { type: 'application/gzip' });
+          state.files = [file];
+          state.results = null;
+          state.labels.clear();
+          state.selectedSample = '';
+          state.selectedSiteId = '';
+          state.sortByMax = false;
+          els.runName.value = PUBLIC_BENCHMARK.name;
+          els.referenceSeq.value = PUBLIC_BENCHMARK.reference;
+          els.targets.value = '135-144';
+          els.siteManifest.value = '';
+          els.minDepth.value = '100';
+          els.minQ.value = '20';
+          els.minLen.value = '30';
+          els.readLimit.value = '25000';
+          els.minIdentity.value = '80';
+          els.signalMode.value = 'substitution';
+          els.expectedEdit.value = PUBLIC_BENCHMARK.expectedEdit;
+          els.assayType.value = 'cas';
+          renderAssayFields();
+          $('casSpacer').value = PUBLIC_BENCHMARK.spacer;
+          $('casPam').value = PUBLIC_BENCHMARK.pam;
+          $('casWindow').value = PUBLIC_BENCHMARK.spacerWindow;
+          els.dropN.checked = true;
+          renderFiles();
+          renderSummary();
+          renderFigure();
+          renderTab();
+          addLog('Public benchmark loaded. Click Run analysis to reproduce the validation result.', 'ok');
+          setStep('upload', ['setup']);
+        } catch (error) {
+          addLog(error.message || String(error), 'bad');
+        } finally {
+          els.publicBenchmarkBtn.disabled = false;
+        }
+      }
+
+      function copySettings() {
+        const settings = getSettings(normalizeSeq(els.referenceSeq.value));
+        let additionalSites = [];
+        try {
+          additionalSites = parseSiteManifest(els.siteManifest.value, settings).map((site) => ({
+            siteName: site.siteName,
+            referenceLength: site.reference.length,
+            targetPositions: Array.from(site.settings.targets).sort((a, b) => a - b)
+          }));
+        } catch (error) {
+          additionalSites = [{ error: error.message || String(error) }];
+        }
+        const text = JSON.stringify({
+          runName: els.runName.value,
+          referenceLength: normalizeSeq(els.referenceSeq.value).length,
+          assayType: settings.assayType,
+          targetSource: settings.targetSource,
+          targetPositions: Array.from(settings.targets).sort((a, b) => a - b),
+          additionalSites,
+          assayDetails: settings.assayDetails,
+          minQ: settings.minQ,
+          minLen: settings.minLen,
+          readLimit: settings.readLimit,
+          minIdentity: settings.minIdentity,
+          signalMode: settings.signalMode,
+          expectedEdit: settings.expectedEdit
+        }, null, 2);
+        navigator.clipboard?.writeText(text).then(() => addLog('Current settings copied to clipboard.', 'ok')).catch(() => addLog('Clipboard copy failed.', 'warn'));
+      }
+
+      function bindEvents() {
+        $('pickBtn').onclick = () => els.fileInput.click();
+        els.fileInput.onchange = (event) => {
+          addFiles(event.target.files);
+          event.target.value = '';
+        };
+        $('demoBtn').onclick = loadDemo;
+        $('publicBenchmarkBtn').onclick = loadPublicBenchmark;
+        $('clearBtn').onclick = clearRun;
+        $('runBtn').onclick = runAnalysis;
+        $('cancelBtn').onclick = () => {
+          state.cancelRequested = true;
+          addLog('Analysis will stop after the current sample finishes.', 'warn');
+        };
+        $('sortBtn').onclick = () => {
+          state.sortByMax = !state.sortByMax;
+          renderFigure();
+        };
+        $('copySettingsBtn').onclick = copySettings;
+        $('svgBtn').onclick = exportSvg;
+        $('pngBtn').onclick = exportPng;
+        $('mutationCsvBtn').onclick = () => exportByKind('mutation');
+        $('alleleCsvBtn').onclick = () => exportByKind('allele');
+        $('qcCsvBtn').onclick = () => exportByKind('qc');
+        $('reportBtn').onclick = () => exportByKind('report');
+        $('htmlReportBtn').onclick = () => exportByKind('html-report');
+        els.siteSelect.onchange = (event) => {
+          state.selectedSiteId = event.target.value;
+          const site = currentSite();
+          state.selectedSample = site && site.samples[0] ? site.samples[0].sample : '';
+          renderSummary();
+          renderFigure();
+          renderTab();
+        };
+        els.signalMode.onchange = () => {
+          renderPreflight();
+          if (state.results) {
+            state.results.sites.forEach((site) => {
+              site.settings.signalMode = els.signalMode.value;
+              site.samples.forEach((sample) => {
+                sample.positionRows.forEach((row) => {
+                  row.displayReads = site.settings.signalMode === 'substitution' ? row.substitutionReads : site.settings.signalMode === 'indel' ? row.deletionReads + row.insertionReads : row.editedReads;
+                  row.percent = row.denominator ? row.displayReads / row.denominator * 100 : 0;
+                });
+                sample.maxPercent = Math.max(0, ...sample.positionRows.map((row) => row.percent));
+              });
+              site.maxPercent = Math.max(0, ...site.samples.map((sample) => sample.maxPercent));
+              site.mutationRows = site.samples.flatMap((sample) => sample.positionRows.map((row) => ({ ...row, site: site.siteName, siteId: site.siteId, sample: sample.sample, label: labelFor(sample.sample) })));
+            });
+            state.results.mutationRows = state.results.sites.flatMap((site) => site.mutationRows);
+            state.results.samples = currentSite().samples;
+            renderSummary();
+            renderFigure();
+            renderTab();
+          }
+        };
+        els.assayType.onchange = () => {
+          renderAssayFields();
+          renderPreflight();
+          renderFigure();
+          renderTab();
+        };
+        els.assayFields.addEventListener('input', () => {
+          renderPreflight();
+          renderFigure();
+          if (state.activeTab === 'overview') renderTab();
+        });
+        els.referenceSeq.oninput = () => {
+          renderPreflight();
+          renderFigure();
+          if (state.activeTab === 'overview') renderTab();
+        };
+        els.targets.oninput = () => {
+          renderPreflight();
+          renderFigure();
+        };
+        els.minDepth.oninput = () => {
+          renderPreflight();
+          renderFigure();
+        };
+        els.siteManifest.oninput = renderPreflight;
+        [els.minQ, els.minLen, els.readLimit, els.minIdentity, els.dropN].forEach((control) => {
+          control.oninput = renderPreflight;
+          control.onchange = renderPreflight;
+        });
+        els.expectedEdit.onchange = () => {
+          renderPreflight();
+          if (state.results) {
+            state.results.sites.forEach((site) => {
+              site.settings.expectedEdit = parseExpectedEdit(els.expectedEdit.value);
+              site.samples.forEach((sample) => {
+                sample.positionRows.forEach((row) => {
+                  row.expectedEditReads = getExpectedEditReads(row, site.settings.expectedEdit);
+                  row.expectedEditPercent = row.denominator ? row.expectedEditReads / row.denominator * 100 : 0;
+                });
+              });
+              site.mutationRows = site.samples.flatMap((sample) => sample.positionRows.map((row) => ({ ...row, site: site.siteName, siteId: site.siteId, sample: sample.sample, label: labelFor(sample.sample) })));
+            });
+            state.results.mutationRows = state.results.sites.flatMap((site) => site.mutationRows);
+            renderSummary();
+            renderFigure();
+            renderTab();
+          }
+        };
+
+        ['dragenter', 'dragover'].forEach((name) => {
+          els.drop.addEventListener(name, (event) => {
+            event.preventDefault();
+            els.drop.classList.add('drag');
+          });
+        });
+        ['dragleave', 'drop'].forEach((name) => {
+          els.drop.addEventListener(name, (event) => {
+            event.preventDefault();
+            els.drop.classList.remove('drag');
+          });
+        });
+        els.drop.addEventListener('drop', (event) => addFiles(event.dataTransfer.files));
+        els.drop.addEventListener('click', () => els.fileInput.click());
+        els.drop.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') els.fileInput.click();
+        });
+
+        els.fileList.addEventListener('click', (event) => {
+          const button = event.target.closest('[data-remove-file]');
+          if (!button) return;
+          const idx = Number(button.dataset.removeFile);
+          state.files.splice(idx, 1);
+          renderFiles();
+          renderSummary();
+        });
+
+        document.querySelectorAll('.tab').forEach((tab) => {
+          tab.onclick = () => {
+            state.activeTab = tab.dataset.tab;
+            renderTab();
+          };
+        });
+        els.tabBody.addEventListener('input', (event) => {
+          const sample = event.target.dataset ? event.target.dataset.labelSample : '';
+          if (!sample) return;
+          state.labels.set(sample, event.target.value);
+          if (state.results) {
+            state.results.sites.forEach((site) => {
+              site.mutationRows = site.samples.flatMap((item) => item.positionRows.map((row) => ({ ...row, site: site.siteName, siteId: site.siteId, sample: item.sample, label: labelFor(item.sample) })));
+              site.alleleRows = site.samples.flatMap((item) => item.alleles.map((row) => ({ ...row, site: site.siteName, siteId: site.siteId, label: labelFor(item.sample) })));
+            });
+            state.results.mutationRows = state.results.sites.flatMap((site) => site.mutationRows);
+            state.results.alleleRows = state.results.sites.flatMap((site) => site.alleleRows);
+            renderFigure();
+          }
+        });
+        els.tabBody.addEventListener('click', (event) => {
+          const button = event.target.closest('[data-export]');
+          if (button) exportByKind(button.dataset.export);
+        });
+      }
+
+      function init() {
+        els.referenceSeq.value = DEMO_REF;
+        renderAssayFields();
+        bindEvents();
+        renderFiles();
+        renderSummary();
+        renderFigure();
+        renderTab();
+        renderLog();
+      }
+
+      init();
+    })();
+  </script>
 </body>
 </html>
+

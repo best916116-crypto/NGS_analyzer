@@ -1,0 +1,35 @@
+{
+  "runName": "CRISPResso2 EMX1 Base Editor Public FASTQ Benchmark",
+  "dataset": {
+    "name": "CRISPResso2 base-editor example",
+    "sampleName": "emx1_base_editor",
+    "description": "First 25,000 reads from an EMX1 base-editing experiment published as a CRISPResso2 example dataset.",
+    "sourceDocsUrl": "https://docs.crispresso.com/latest/core/examples.html",
+    "fastqUrl": "https://crispresso.com/static/demo/base_editor.fastq.gz",
+    "file": "raw/base_editor.fastq.gz"
+  },
+  "reference": "GGCCCCAGTGGCTGCTCTGGGGGCCTCCTGAGTTTCTCATCTGTGCCCCTCCCTCCCTGGCCCAGGTGAAGGTGTGGTTCCAGAACCGGAGGACAAAGTACAAACGGCAGAAGCTGGAGGAGGAAGGGCCTGAGTCCGAGCAGAAGAAGAAGGGCTCCCATCACATCAACCGGTGGCGCATTGCCACGAAGCAGGCCAATGGGGAGGACATCGATGTCACCTCCAATGACTAGGGTGG",
+  "assay": {
+    "type": "cas",
+    "spacer": "GAGTCCGAGCAGAAGAAGAA",
+    "pam": "NGG",
+    "spacerWindow": "4-13",
+    "expectedEdit": {
+      "name": "cytosine base editing",
+      "from": "C",
+      "to": "T"
+    }
+  },
+  "settings": {
+    "minQ": 20,
+    "minLen": 30,
+    "readLimit": 25000,
+    "minIdentity": 0.8,
+    "dropN": true,
+    "minDepth": 100,
+    "signalMode": "substitution"
+  },
+  "outputs": {
+    "resultDir": "results"
+  }
+}

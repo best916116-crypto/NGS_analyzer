@@ -1,57 +1,38 @@
 <!doctype html>
-<html lang="ko">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AmpliconScope 사용설명서</title>
+  <meta http-equiv="refresh" content="0; url=user_guide.html">
+  <title>Amplicon Analyzer User Guide</title>
   <style>
-    :root{--ink:#1f2933;--muted:#5d6b78;--line:#d8e1ea;--paper:#f7f9fb;--accent:#0f6f9f}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;line-height:1.65}.topbar{background:#fff;border-bottom:1px solid var(--line)}.topbar-inner,main{width:min(920px,calc(100% - 32px));margin:0 auto}.topbar-inner{padding:14px 0;display:flex;align-items:center;justify-content:space-between;gap:12px}main{padding:34px 0 52px}a{color:var(--accent);font-weight:800;text-decoration:none}a:hover{text-decoration:underline}h1{margin:0 0 8px;font-size:clamp(28px,5vw,44px);line-height:1.15}h2{margin:30px 0 10px;font-size:22px}p{margin:0 0 12px;color:var(--muted)}.lead{font-size:17px;max-width:760px}.panel{margin-top:18px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:18px;box-shadow:0 8px 22px rgba(28,45,62,.05)}ul,ol{padding-left:22px;color:var(--muted)}li{margin:6px 0}code{background:#eef3f7;border:1px solid #dce5ed;border-radius:5px;padding:2px 5px;color:#263746}.button{display:inline-flex;min-height:42px;align-items:center;justify-content:center;border-radius:8px;background:var(--accent);color:#fff;padding:0 14px}.button:hover{text-decoration:none;background:#0b557a}table{border-collapse:collapse;width:100%;font-size:14px}th,td{border-bottom:1px solid var(--line);padding:9px;text-align:left;vertical-align:top}th{color:#263746;background:#f8fbfd}
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #f6f8fb;
+      color: #18212b;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    }
+    main {
+      width: min(520px, calc(100% - 32px));
+      background: #fff;
+      border: 1px solid #d8e1ea;
+      border-radius: 8px;
+      padding: 24px;
+      box-shadow: 0 14px 32px rgba(24, 33, 43, .08);
+    }
+    h1 { margin: 0 0 8px; font-size: 22px; }
+    p { color: #5d6b78; line-height: 1.55; }
+    a { color: #0f6f8f; font-weight: 800; text-decoration: none; }
   </style>
 </head>
 <body>
-  <div class="topbar"><div class="topbar-inner"><a href="../index.html">AmpliconScope</a><a class="button" href="../demo/ngs_amplicon_analyzer_ko.html">분석기 열기</a></div></div>
   <main>
-    <h1>AmpliconScope 사용설명서</h1>
-    <p class="lead">Amplicon NGS 결과 CSV를 브라우저에서 불러와 heatmap, allele spectrum, QC 요약, SVG/PNG/CSV export를 만드는 도구입니다. 파일은 사용자의 브라우저 안에서만 읽습니다.</p>
-
-    <section class="panel">
-      <h2>1. 준비할 파일</h2>
-      <table><thead><tr><th>파일</th><th>필수 여부</th><th>내용</th></tr></thead><tbody><tr><td><code>all_mutation_raw.csv</code></td><td>필수</td><td>reference, read, alignment, read count, ratio, filename이 있는 allele-level table</td></tr><tr><td><code>read_counts.csv</code></td><td>필수</td><td>샘플별 <code>n_aligned_noindel</code>, <code>n_aligned_total</code></td></tr><tr><td><code>summary.nonX_per_pos.mutations.csv</code></td><td>선택</td><td>위치별 mutation count table</td></tr><tr><td><code>sample_sheet.csv</code></td><td>선택</td><td>샘플명, target, condition, annotation 정보</td></tr></tbody></table>
-    </section>
-
-    <section class="panel">
-      <h2>2. 기본 사용 순서</h2>
-      <ol><li>분석기를 엽니다.</li><li>CSV 파일을 드래그하거나 <strong>파일 선택</strong> 버튼으로 불러옵니다.</li><li>샘플 수, positions, max mutation %, median reads를 확인합니다.</li><li><strong>계산 기준 reads</strong>, target positions, minimum reads, figure layout을 조정합니다.</li><li>필요하면 <strong>Samples</strong> 탭에서 figure에 표시될 sample 이름을 수정합니다.</li><li>Allele spectrum과 heatmap data를 확인합니다.</li><li>필요한 형식으로 SVG, PNG, CSV, Figure Report를 저장합니다.</li></ol>
-    </section>
-
-    <section class="panel">
-      <h2>3. Sample 이름 수정</h2>
-      <p><strong>Samples</strong> 탭에서 각 sample의 표시 이름을 직접 입력할 수 있습니다. 이 기능은 figure와 export table에 표시되는 label만 바꾸며, 원본 CSV 파일은 수정하지 않습니다.</p>
-      <ul><li><strong>view</strong> 버튼을 누르면 해당 sample의 allele spectrum을 볼 수 있습니다.</li><li><strong>라벨 초기화</strong> 버튼을 누르면 앱에서 입력한 sample 이름을 모두 되돌립니다.</li><li><code>sample_sheet.csv</code>가 있으면 기본 label로 사용할 수 있고, 앱 안에서 다시 고칠 수 있습니다.</li></ul>
-    </section>
-
-    <section class="panel">
-      <h2>4. 계산 기준 reads</h2>
-      <p>mutation %를 계산할 때 어떤 read count로 나눌지 정하는 옵션입니다.</p>
-      <ul><li><strong>Indel 제외 정렬 reads</strong>: <code>n_aligned_noindel</code>을 기준으로 계산합니다.</li><li><strong>전체 정렬 reads</strong>: <code>n_aligned_total</code>을 기준으로 계산합니다.</li></ul>
-      <p>기본값은 <code>n_aligned_noindel</code>입니다. 좌표는 1-based amplicon position으로 표시됩니다.</p>
-    </section>
-
-    <section class="panel">
-      <h2>5. Figure layout</h2>
-      <ul><li><strong>Compact panels (auto)</strong>: 샘플이 많으면 여러 패널로 나누어 더 짧은 heatmap을 만듭니다.</li><li><strong>Single long heatmap</strong>: 모든 샘플을 하나의 긴 heatmap으로 표시합니다.</li></ul>
-      <p>Figure export에는 제목과 부제목을 넣지 않습니다. 앱에서 설정한 sample label, position tick, mutation percentage legend만 SVG/PNG에 포함됩니다.</p>
-    </section>
-
-    <section class="panel">
-      <h2>6. 내보내기</h2>
-      <ul><li><strong>Figure SVG</strong>: 벡터 형식 heatmap을 저장합니다.</li><li><strong>Figure PNG</strong>: 이미지 형식 heatmap을 저장합니다.</li><li><strong>Heatmap CSV</strong>: 위치별 mutation % table을 저장합니다.</li><li><strong>Figure Report</strong>: 사용한 설정과 요약값을 Markdown으로 저장합니다.</li></ul>
-    </section>
-
-    <section class="panel">
-      <h2>7. 데이터 보호</h2>
-      <p>이 앱은 정적 HTML 파일입니다. 로그인, 서버 업로드, 데이터베이스 저장 과정이 없습니다. 개인 실험 데이터나 raw sequencing file은 GitHub repository에 올리지 말고 브라우저에서 직접 불러오세요.</p>
-    </section>
+    <h1>Opening the user guide</h1>
+    <p>The Amplicon Analyzer guide has moved to an English public guide page.</p>
+    <p><a href="user_guide.html">Open Amplicon Analyzer User Guide</a></p>
   </main>
 </body>
 </html>
