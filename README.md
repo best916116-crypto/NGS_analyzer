@@ -10,13 +10,13 @@ https://best916116-crypto.github.io/NGS_analyzer/
 
 ## What You Can Do
 
-- Drag and drop `.fastq`, `.fq`, `.fastq.gz`, or `.fq.gz` files
+- Drag and drop `.fastq`, `.fq`, `.fastq.gz`, `.fq.gz`, joined FASTQ text files, or choose a folder
 - Paste a reference amplicon sequence and target positions
 - Run read QC, unique-read aggregation, reference alignment, and mutation calling
 - Track expected base-editor conversions such as `C>T` or `A>G`
-- Review sample-level QC, read depth, alignment-pass counts, alignment identity, mutation heatmap, and allele spectrum
+- Review sample-level QC, read depth, alignment-pass counts, alignment identity, mutation heatmap, reference sequence, and allele spectrum
 - Edit displayed sample labels without changing the original FASTQ files
-- Export processed data and figures as CSV, SVG, PNG, Markdown, and self-contained HTML report files
+- Export processed data, run summary, and figures as CSV, JSON, SVG, PNG, Markdown, and self-contained HTML report files
 
 ## Recommended Workflow
 
@@ -24,11 +24,12 @@ https://best916116-crypto.github.io/NGS_analyzer/
 2. Paste or confirm the reference amplicon sequence.
 3. Choose the assay type: `Custom window`, `Cas / CRISPR`, or `TALE / TALEN`.
 4. Optional: add extra site rows in the multi-site manifest.
-5. Drag in FASTQ files.
-6. Review the preflight panel.
-7. Click `Run analysis`.
-8. Review QC, heatmap, processed table, and allele spectrum.
-9. Export the files needed for downstream analysis or slides.
+5. Drag in FASTQ files, choose files, or choose a folder.
+6. Optional: set a first/last sample number to process only numbered sample groups.
+7. Review the preflight panel.
+8. Click `Run analysis`.
+9. Review QC, heatmap, processed table, and allele spectrum.
+10. Export the files needed for downstream analysis or slides.
 
 ## Input Files
 
@@ -38,12 +39,17 @@ Required:
 | --- | --- |
 | `.fastq` / `.fq` | Plain FASTQ files |
 | `.fastq.gz` / `.fq.gz` | Gzip-compressed FASTQ files in browsers that support `DecompressionStream` |
+| `.fastjoin` / `.fastqjoin` / `.fqjoin` / `.join` / `.txt` | Joined or concatenated FASTQ text files |
 | reference amplicon sequence | A/C/G/T/N bases pasted into the app |
 | additional site manifest | Optional rows for multi-site analysis |
+
+The file picker accepts individual files, and the folder picker accepts a directory of many FASTQ-like files. Folder upload uses browser-local file access; files are still processed locally and are not uploaded to a server.
 
 The reference should be the full expected PCR amplicon sequence used for alignment, not only the edited bases. The targeting window is a smaller region inside that reference that is highlighted in the figure and used as the expected editing region.
 
 Paired-end files are grouped by sample name when filenames contain common `R1` / `R2` markers. Reads are aligned independently against the reference, and reverse-complement orientation is tested automatically. Current limitation: paired-end consensus merging is not performed.
+
+For large numbered batches, use `First sample number` and `Last sample number` to process only matching inferred sample groups. Files without a number are skipped while this filter is active.
 
 ## Multi-Site Analysis
 
@@ -76,6 +82,7 @@ For TALE/TALEN assays, left/right binding sites are more reliable than spacer-on
 | `processed_mutation_table.csv` | Site-aware position-level substitution, deletion, insertion, and edit-rate table |
 | `allele_spectrum_table.csv` | Site-aware unique read sequences with counts, ratios, orientation, identity, and edit signature |
 | `qc_read_counts.csv` | Site-aware sample read count and filtering summary |
+| `amplicon_run_summary.json` | Run settings, sample-number filter, site summaries, QC totals, and top edited positions |
 | `amplicon_mutation_heatmap.svg` | Editable vector heatmap |
 | `amplicon_mutation_heatmap.png` | Slide-ready heatmap image |
 | `amplicon_run_report.md` | Markdown record of run settings and sample summary |
@@ -95,7 +102,7 @@ For each sample and position:
 edit percentage = selected signal reads at position / position-level covered reads * 100
 ```
 
-Coordinates are 1-based amplicon positions. Target positions are highlighted in the heatmap. Terminal no-coverage gaps are not counted as deletion edits.
+Coordinates are 1-based amplicon positions. The heatmap uses a black grid for amplicon bases, red outlines and labels for target positions, and a reference sequence row below the figure. Terminal no-coverage gaps are not counted as deletion edits.
 
 Reads are first filtered by FASTQ quality and length, then aligned in both orientations. Only reads at or above the configured minimum alignment identity are used for allele tables, position-level coverage, and mutation percentages.
 

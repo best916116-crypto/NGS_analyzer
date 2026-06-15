@@ -782,12 +782,14 @@
           <div id="drop" class="drop" role="button" tabindex="0">
             <div>
               <strong>Drop FASTQ files here</strong>
-              <span>Supports .fastq, .fq, .fastq.gz, and .fq.gz</span>
+              <span>Supports FASTQ, FASTQ.GZ, and joined FASTQ text files</span>
             </div>
           </div>
-          <input id="fileInput" class="file-input" type="file" multiple accept=".fastq,.fq,.gz,.txt">
+          <input id="fileInput" class="file-input" type="file" multiple accept=".fastq,.fq,.fastq.gz,.fq.gz,.fastjoin,.fastjoin.gz,.fastqjoin,.fastqjoin.gz,.fqjoin,.fqjoin.gz,.join,.join.gz,.txt">
+          <input id="folderInput" class="file-input" type="file" multiple webkitdirectory accept=".fastq,.fq,.fastq.gz,.fq.gz,.fastjoin,.fastjoin.gz,.fastqjoin,.fastqjoin.gz,.fqjoin,.fqjoin.gz,.join,.join.gz,.txt">
           <div class="btns" style="margin-top:10px">
             <button class="btn primary" id="pickBtn" type="button">Choose files</button>
+            <button class="btn" id="folderBtn" type="button">Choose folder</button>
           </div>
           <div id="fileList" class="file-list"></div>
         </section>
@@ -821,6 +823,17 @@
               <p class="hint">Reads below this identity are excluded from mutation calling.</p>
             </div>
           </div>
+          <div class="inline-grid">
+            <div class="field">
+              <label for="sampleStart">First sample number</label>
+              <input id="sampleStart" type="number" min="0" step="1" placeholder="All">
+            </div>
+            <div class="field">
+              <label for="sampleEnd">Last sample number</label>
+              <input id="sampleEnd" type="number" min="0" step="1" placeholder="All">
+            </div>
+          </div>
+          <p class="hint">Optional filename filter for numbered samples. Files without a number are skipped while this filter is active.</p>
           <div class="field">
             <label for="signalMode">Edit signal shown in heatmap</label>
             <select id="signalMode">
@@ -868,7 +881,7 @@
           <div class="panel-head">
             <div>
               <h2>Export</h2>
-              <p>Figure exports use the displayed site; CSV exports include all sites.</p>
+              <p>Figure exports use the displayed site; table and summary exports include all sites.</p>
             </div>
             <span class="badge" id="exportBadge">waiting</span>
           </div>
@@ -878,6 +891,7 @@
             <button class="btn" id="mutationCsvBtn" type="button">Position-level CSV</button>
             <button class="btn" id="alleleCsvBtn" type="button">Allele-spectrum CSV</button>
             <button class="btn" id="qcCsvBtn" type="button">QC CSV</button>
+            <button class="btn" id="summaryJsonBtn" type="button">Summary JSON</button>
             <button class="btn" id="reportBtn" type="button">Methods + QC report</button>
             <button class="btn" id="htmlReportBtn" type="button">HTML report</button>
           </div>
@@ -980,6 +994,7 @@
         expectedEdit: $('expectedEdit'),
         dropN: $('dropN'),
         fileInput: $('fileInput'),
+        folderInput: $('folderInput'),
         drop: $('drop'),
         fileList: $('fileList'),
         fileBadge: $('fileBadge'),
@@ -992,6 +1007,8 @@
         progressBar: $('progressBar'),
         progressText: $('progressText'),
         log: $('log'),
+        sampleStart: $('sampleStart'),
+        sampleEnd: $('sampleEnd'),
         figureWrap: $('figureWrap'),
         siteSelect: $('siteSelect'),
         tabBody: $('tabBody'),
@@ -1131,7 +1148,11 @@
       }
 
       function isFastqFile(file) {
-        return /\.(fastq|fq)(\.gz)?$/i.test(file.name);
+        return /\.(fastq|fq|fastjoin|fastqjoin|fqjoin|join|txt)(\.gz)?$/i.test(file.name);
+      }
+
+      function fileDisplayName(file) {
+        return file.webkitRelativePath || file.name;
       }
 
       function addFiles(fileList) {
@@ -1139,13 +1160,13 @@
         const added = [];
         for (const file of incoming) {
           if (!isFastqFile(file)) {
-            addLog(`${file.name} is not a supported FASTQ format. Use .fastq, .fq, .fastq.gz, or .fq.gz.`, 'warn');
+            addLog(`${fileDisplayName(file)} is not a supported FASTQ format. Use FASTQ, FASTQ.GZ, joined FASTQ, or plain FASTQ text.`, 'warn');
             continue;
           }
-          const exists = state.files.some((old) => old.name === file.name && old.size === file.size);
+          const exists = state.files.some((old) => fileDisplayName(old) === fileDisplayName(file) && old.size === file.size);
           if (!exists) {
             state.files.push(file);
-            added.push(file.name);
+            added.push(fileDisplayName(file));
           }
         }
         if (added.length) {
@@ -1163,19 +1184,23 @@
           renderPreflight();
           return;
         }
-        els.fileList.innerHTML = state.files.map((file, idx) => {
+        const maxShown = 180;
+        const visibleFiles = state.files.slice(0, maxShown);
+        const hiddenCount = state.files.length - visibleFiles.length;
+        els.fileList.innerHTML = visibleFiles.map((file, idx) => {
           const sample = inferSampleName(file.name);
           const role = inferReadRole(file.name);
+          const displayName = fileDisplayName(file);
           return `
             <div class="file-row">
               <div>
-                <strong>${escapeHtml(file.name)}</strong>
+                <strong>${escapeHtml(displayName)}</strong>
                 <span>${escapeHtml(sample)} - ${escapeHtml(role)} - ${formatBytes(file.size)}</span>
               </div>
-              <button class="remove-file" data-remove-file="${idx}" type="button" aria-label="Remove ${escapeHtml(file.name)}">x</button>
+              <button class="remove-file" data-remove-file="${idx}" type="button" aria-label="Remove ${escapeHtml(displayName)}">x</button>
             </div>
           `;
-        }).join('');
+        }).join('') + (hiddenCount > 0 ? `<p class="hint">Showing the first ${formatInt(maxShown)} files. ${formatInt(hiddenCount)} additional file(s) are queued and will be processed if selected by the sample number filter.</p>` : '');
         renderPreflight();
       }
 
@@ -1187,14 +1212,48 @@
 
       function inferSampleName(name) {
         return String(name)
-          .replace(/\.(fastq|fq)(\.gz)?$/i, '')
+          .replace(/\.(fastq|fq|fastjoin|fastqjoin|fqjoin|join|txt)(\.gz)?$/i, '')
           .replace(/_R[12]_001$/i, '')
           .replace(/[_\-.]R[12]$/i, '')
           .replace(/[_\-.][12]$/i, '')
           .replace(/\s+/g, '_') || 'sample';
       }
 
-      function groupFiles(files) {
+      function sampleNumberFromName(value) {
+        const match = String(value || '').match(/\d+/);
+        return match ? Number(match[0]) : null;
+      }
+
+      function getSampleNumberRange() {
+        const startRaw = String(els.sampleStart?.value || '').trim();
+        const endRaw = String(els.sampleEnd?.value || '').trim();
+        const hasStart = startRaw !== '';
+        const hasEnd = endRaw !== '';
+        const start = hasStart ? Number(startRaw) : null;
+        const end = hasEnd ? Number(endRaw) : null;
+        const invalidNumber = (hasStart && (!Number.isFinite(start) || start < 0 || !Number.isInteger(start))) || (hasEnd && (!Number.isFinite(end) || end < 0 || !Number.isInteger(end)));
+        const warning = invalidNumber
+          ? 'Sample number filter needs non-negative whole numbers.'
+          : (hasStart && hasEnd && start > end ? 'Sample number filter start is greater than end.' : '');
+        return {
+          active: hasStart || hasEnd,
+          start,
+          end,
+          warning,
+          label: hasStart && hasEnd ? `${start}-${end}` : hasStart ? `${start}+` : hasEnd ? `<=${end}` : 'all'
+        };
+      }
+
+      function sampleInRange(sample, range) {
+        if (!range.active || range.warning) return true;
+        const sampleNumber = sampleNumberFromName(sample);
+        if (sampleNumber == null) return false;
+        if (range.start != null && sampleNumber < range.start) return false;
+        if (range.end != null && sampleNumber > range.end) return false;
+        return true;
+      }
+
+      function buildFileGroups(files) {
         const groups = new Map();
         for (const file of files) {
           const sample = inferSampleName(file.name);
@@ -1206,9 +1265,23 @@
         return Array.from(groups.values()).sort((a, b) => a.sample.localeCompare(b.sample));
       }
 
+      function groupFiles(files, range = getSampleNumberRange()) {
+        const groups = buildFileGroups(files);
+        if (!range.active || range.warning) return groups;
+        return groups.filter((group) => sampleInRange(group.sample, range));
+      }
+
+      function skippedGroupsForRange(files, range = getSampleNumberRange()) {
+        const groups = buildFileGroups(files);
+        if (!range.active || range.warning) return [];
+        return groups.filter((group) => !sampleInRange(group.sample, range));
+      }
+
       function renderPreflight() {
         const reference = normalizeSeq(els.referenceSeq.value);
-        const groups = groupFiles(state.files);
+        const sampleRange = getSampleNumberRange();
+        const groups = groupFiles(state.files, sampleRange);
+        const skippedGroups = skippedGroupsForRange(state.files, sampleRange);
         const settings = getSettings(reference);
         const targetPositions = Array.from(settings.targets).sort((a, b) => a - b);
         const warnings = [];
@@ -1220,13 +1293,15 @@
           warnings.push(error.message || String(error));
         }
         if (!state.files.length) warnings.push('No FASTQ files have been added.');
+        if (sampleRange.warning) warnings.push(sampleRange.warning);
+        if (state.files.length && sampleRange.active && !sampleRange.warning && !groups.length) warnings.push('No sample groups match the sample number filter.');
         if (!targetPositions.length) warnings.push('No target positions are currently defined.');
         if (settings.targetWarning) warnings.push(settings.targetWarning);
         if (state.files.some((file) => /\.gz$/i.test(file.name)) && !('DecompressionStream' in window)) warnings.push('This browser cannot decompress FASTQ.GZ files.');
         warnings.push('Current limitation: paired-end files are grouped but not merged into consensus reads.');
         warnings.push('Adapter trimming is not performed; trim adapters upstream when needed.');
 
-        const statusReady = reference.length >= 20 && state.files.length && targetPositions.length && !settings.targetWarning && !warnings.some((item) => item.startsWith('Site manifest'));
+        const statusReady = reference.length >= 20 && groups.length && targetPositions.length && !settings.targetWarning && !sampleRange.warning && !warnings.some((item) => item.startsWith('Site manifest'));
         els.preflightBadge.textContent = statusReady ? 'ready' : 'review';
         els.preflightBadge.className = `badge ${statusReady ? 'good' : 'warn'}`;
         const sampleText = groups.length
@@ -1237,6 +1312,7 @@
             <div class="preflight-row"><span>Reference</span><strong>${formatInt(reference.length)} bp</strong></div>
             <div class="preflight-row"><span>Sites</span><strong>${formatInt(siteConfigs.length)} site${siteConfigs.length === 1 ? '' : 's'}</strong></div>
             <div class="preflight-row"><span>Samples</span><strong>${escapeHtml(sampleText)}</strong></div>
+            <div class="preflight-row"><span>Sample number filter</span><strong>${escapeHtml(sampleRange.active ? `${sampleRange.label} (${groups.length} selected, ${skippedGroups.length} skipped)` : 'all samples')}</strong></div>
             <div class="preflight-row"><span>Assay inference</span><strong>${escapeHtml(settings.targetSource)}</strong></div>
             <div class="preflight-row"><span>Target positions</span><strong>${escapeHtml(targetPositions.join(', ') || 'none')}</strong></div>
             <div class="preflight-row"><span>Expected edit</span><strong>${escapeHtml(settings.expectedEdit ? settings.expectedEdit.label : 'not specified')}</strong></div>
@@ -1270,6 +1346,7 @@
           minDepth: Math.max(0, Number(els.minDepth.value) || 0),
           signalMode: els.signalMode.value,
           expectedEdit: parseExpectedEdit(els.expectedEdit.value),
+          sampleRange: getSampleNumberRange(),
           assayType: els.assayType.value,
           targets: assay.targets,
           targetSource: assay.source,
@@ -1659,7 +1736,19 @@
           return;
         }
         const primarySettings = siteConfigs[0].settings;
-        const fileGroups = groupFiles(state.files);
+        const sampleRange = getSampleNumberRange();
+        if (sampleRange.warning) {
+          addLog(sampleRange.warning, 'bad');
+          setStep('upload', ['setup']);
+          return;
+        }
+        const fileGroups = groupFiles(state.files, sampleRange);
+        const skippedGroups = skippedGroupsForRange(state.files, sampleRange);
+        if (!fileGroups.length) {
+          addLog('No sample groups match the sample number filter. Adjust the first/last sample number or clear the filter.', 'warn');
+          setStep('upload', ['setup']);
+          return;
+        }
         state.processing = true;
         state.cancelRequested = false;
         state.results = null;
@@ -1673,6 +1762,7 @@
         setStep('process', ['setup', 'upload']);
         setProgress(2, 'Reading FASTQ files.');
         addLog(`Starting analysis for ${fileGroups.length} sample group(s) across ${siteConfigs.length} site(s).`, 'info');
+        if (sampleRange.active) addLog(`Sample number filter ${sampleRange.label}: ${fileGroups.length} group(s) selected, ${skippedGroups.length} skipped.`, 'info');
         if (primarySettings.targetWarning) addLog(primarySettings.targetWarning, 'warn');
         else if (primarySettings.assayType !== 'custom') addLog(primarySettings.targetSource, 'ok');
         renderSummary();
@@ -1714,7 +1804,7 @@
             siteResults.push(buildSiteResult(samples, siteConfig));
           }
 
-          const run = buildRunResult(siteResults);
+          const run = buildRunResult(siteResults, sampleRange);
           state.results = run;
           state.selectedSiteId = run.sites[0] ? run.sites[0].siteId : '';
           const activeSite = currentSite();
@@ -1919,7 +2009,7 @@
 
         return {
           sample: group.sample,
-          files: group.files.map((file) => file.name),
+          files: group.files.map((file) => fileDisplayName(file)),
           roles: Array.from(group.roles),
           qc: {
             estimatedRecords: parsedGroup.estimatedRecords,
@@ -2215,11 +2305,12 @@
         };
       }
 
-      function buildRunResult(sites) {
+      function buildRunResult(sites, sampleRange = getSampleNumberRange()) {
         const first = sites[0] || { reference: '', settings: {}, samples: [], mutationRows: [], alleleRows: [], qcRows: [] };
         return {
           createdAt: new Date(),
           runName: els.runName.value || 'Amplicon analysis run',
+          sampleRange,
           reference: first.reference,
           settings: first.settings,
           samples: first.samples,
@@ -2322,17 +2413,18 @@
         const left = compact ? 116 : 154;
         const right = 72;
         const top = 44;
-        const bottom = 72;
+        const bottom = 94;
         const gap = compact ? 24 : 0;
+        const sequenceH = compact ? 16 : 20;
         const panelW = left + cols.length * cellW + right;
         const maxRows = Math.max(...panels.map((panel) => panel.length));
         const width = Math.max(820, panels.length * panelW + (panels.length - 1) * gap);
-        const height = top + maxRows * rowH + bottom;
+        const height = top + maxRows * rowH + sequenceH + bottom;
         const signalLabel = getSignalLabel(settings.signalMode);
 
         let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="Amplicon mutation heatmap">`;
         svg += '<rect width="100%" height="100%" fill="#ffffff"/>';
-        svg += '<style>.title{font:700 13px Arial,sans-serif;fill:#18212b}.axis{font:10px Arial,sans-serif;fill:#4c5b68}.row{font:11px Arial,sans-serif;fill:#18212b}.tiny{font:9px Arial,sans-serif;fill:#687786}.warn{fill:#aa6b00}</style>';
+        svg += '<style>.title{font:700 13px Arial,sans-serif;fill:#18212b}.axis{font:10px Arial,sans-serif;fill:#4c5b68}.row{font:11px Arial,sans-serif;fill:#18212b}.base{font:700 9px Arial,sans-serif;fill:#18212b}.tiny{font:9px Arial,sans-serif;fill:#687786}.warn{fill:#aa6b00}</style>';
         svg += `<text x="14" y="20" class="title">${escapeHtml(`${state.results.runName} - ${site.siteName}`)}</text>`;
         svg += `<text x="14" y="36" class="axis">${escapeHtml(signalLabel)} - generated ${escapeHtml(formatTimestamp(state.results.createdAt))}</text>`;
 
@@ -2355,9 +2447,17 @@
               const x = ox + left + colIndex * cellW;
               const target = targets.has(row.position);
               const fill = low ? '#e1e6ec' : heatColor(row.percent);
-              svg += `<rect x="${x}" y="${y}" width="${Math.max(3, cellW - 1)}" height="${rowH - 1}" fill="${fill}" stroke="${target ? '#b42318' : '#ffffff'}" stroke-width="${target ? 1.5 : .6}"><title>${escapeHtml(label)} position ${row.position}: ${formatPct(row.percent, 2)}%</title></rect>`;
+              svg += `<rect x="${x}" y="${y}" width="${Math.max(3, cellW - 1)}" height="${rowH - 1}" fill="${fill}" stroke="${target ? '#b42318' : '#111827'}" stroke-width="${target ? 1.5 : .45}"><title>${escapeHtml(label)} position ${row.position}: ${formatPct(row.percent, 2)}%</title></rect>`;
             });
             svg += `<text x="${ox + left + cols.length * cellW + 8}" y="${y + rowH * .72}" class="axis">${formatPct(sample.maxPercent, 1)}%</text>`;
+          });
+
+          const sequenceY = top + maxRows * rowH + (compact ? 13 : 16);
+          svg += `<text x="${ox + left - 8}" y="${sequenceY}" text-anchor="end" class="axis">Reference</text>`;
+          cols.forEach((col, idx) => {
+            const x = ox + left + idx * cellW + cellW / 2;
+            const cls = targets.has(col.position) ? 'warn' : 'base';
+            if (cellW >= 7) svg += `<text x="${x}" y="${sequenceY}" text-anchor="middle" class="${cls}">${escapeHtml(col.refBase)}</text>`;
           });
         });
 
@@ -2390,7 +2490,7 @@
           svg += `<rect x="${x + idx * 50}" y="${y}" width="40" height="12" fill="${heatColor(value)}" stroke="#d8e1ea"/>`;
           svg += `<text x="${x + idx * 50}" y="${y + 29}" class="tiny">${value}%</text>`;
         });
-        svg += '<text x="14" y="' + (y + 29) + '" class="tiny">Red outline: target position - gray row: below minimum reads</text>';
+        svg += '<text x="14" y="' + (y + 29) + '" class="tiny">Black grid: amplicon bases - red outline/text: target position - gray row: below minimum reads</text>';
         svg += '</g>';
         return svg;
       }
@@ -2639,10 +2739,11 @@
             <button class="btn" data-export="mutation" type="button">Position-level CSV</button>
             <button class="btn" data-export="allele" type="button">Allele-spectrum CSV</button>
             <button class="btn" data-export="qc" type="button">QC CSV</button>
+            <button class="btn" data-export="summary-json" type="button">Summary JSON</button>
             <button class="btn" data-export="report" type="button">Methods + QC report</button>
             <button class="btn" data-export="html-report" type="button">HTML report</button>
           </div>
-          <p class="hint">Figure exports use the displayed site. CSV and report exports include all analyzed sites.</p>
+          <p class="hint">Figure exports use the displayed site. Table, summary, and report exports include all analyzed sites.</p>
         `;
       }
 
@@ -2718,6 +2819,80 @@
         return toCsv(header, rows);
       }
 
+      function describeSampleRange(run = state.results) {
+        const range = run && run.sampleRange ? run.sampleRange : getSampleNumberRange();
+        return range && range.active ? range.label : 'all samples';
+      }
+
+      function serializableSampleRange(range) {
+        return {
+          active: !!(range && range.active),
+          start: range && range.start != null ? range.start : null,
+          end: range && range.end != null ? range.end : null,
+          label: range && range.active ? range.label : 'all samples'
+        };
+      }
+
+      function buildSummaryJson() {
+        const run = state.results;
+        const payload = {
+          runName: run.runName,
+          createdAt: run.createdAt instanceof Date ? run.createdAt.toISOString() : run.createdAt,
+          displayedSite: currentSite() ? currentSite().siteName : '',
+          sampleNumberFilter: serializableSampleRange(run.sampleRange),
+          totals: {
+            sites: run.sites.length,
+            sampleSiteAnalyses: run.qcRows.length,
+            qcPassedReads: run.qcRows.reduce((sum, row) => sum + row.passedReads, 0),
+            alignmentPassedReads: run.qcRows.reduce((sum, row) => sum + row.alignedReads, 0),
+            lowIdentityReads: run.qcRows.reduce((sum, row) => sum + row.lowIdentityReads, 0),
+            maxEditPercent: Math.max(0, ...run.sites.map((site) => site.maxPercent))
+          },
+          outputs: {
+            processedMutationTable: 'processed_mutation_table.csv',
+            alleleSpectrumTable: 'allele_spectrum_table.csv',
+            qcReadCounts: 'qc_read_counts.csv',
+            figureSvg: 'amplicon_mutation_heatmap.svg',
+            figurePng: 'amplicon_mutation_heatmap.png',
+            markdownReport: 'amplicon_run_report.md',
+            htmlReport: 'amplicon_run_report.html'
+          },
+          sites: run.sites.map((site) => ({
+            siteName: site.siteName,
+            referenceLength: site.reference.length,
+            targetPositions: Array.from(site.settings.targets).sort((a, b) => a - b),
+            targetSource: site.settings.targetSource,
+            signalMode: site.settings.signalMode,
+            expectedEdit: site.settings.expectedEdit,
+            assayType: site.settings.assayType,
+            samples: site.samples.map((sample) => ({
+              sample: sample.sample,
+              label: labelFor(sample.sample),
+              files: sample.files,
+              qc: sample.qc,
+              maxEditPercent: sample.maxPercent,
+              warnings: sample.warnings
+            })),
+            topEditedPositions: site.mutationRows
+              .slice()
+              .sort((a, b) => b.percent - a.percent)
+              .slice(0, 25)
+              .map((row) => ({
+                sample: row.sample,
+                label: labelFor(row.sample),
+                position: row.position,
+                refBase: row.refBase,
+                signalReads: row.displayReads,
+                denominator: row.denominator,
+                percent: row.percent,
+                expectedEditReads: row.expectedEditReads,
+                expectedEditPercent: row.expectedEditPercent
+              }))
+          }))
+        };
+        return JSON.stringify(payload, null, 2) + '\n';
+      }
+
       function toCsv(header, rows) {
         const encode = (value) => `"${String(value == null ? '' : value).replace(/"/g, '""')}"`;
         return [header.map(encode).join(','), ...rows.map((row) => row.map(encode).join(','))].join('\n');
@@ -2751,6 +2926,7 @@
           `- Alignment-passed reads across site analyses: ${totalAligned}`,
           `- Edit signal shown in heatmap: ${getSignalLabel(settings.signalMode)}`,
           `- Displayed site at export: ${activeSite.siteName}`,
+          `- Sample number filter: ${describeSampleRange(run)}`,
           `- Minimum mean Q: ${settings.minQ}`,
           `- Minimum read length: ${settings.minLen}`,
           `- Minimum alignment identity: ${formatPct(settings.minIdentity * 100, 1)}%`,
@@ -2792,6 +2968,7 @@
         const totalPassed = run.qcRows.reduce((sum, row) => sum + row.passedReads, 0);
         const totalAligned = run.qcRows.reduce((sum, row) => sum + row.alignedReads, 0);
         const maxEdit = Math.max(0, ...run.sites.map((site) => site.maxPercent));
+        const sampleRangeText = describeSampleRange(run);
         const siteSummaryRows = run.sites.map((site) => {
           const passed = site.samples.reduce((sum, sample) => sum + sample.qc.passedReads, 0);
           const aligned = site.samples.reduce((sum, sample) => sum + sample.qc.alignedReads, 0);
@@ -2875,6 +3052,7 @@
       <div class="metric"><span>Alignment-passed reads</span><strong>${formatInt(totalAligned)}</strong></div>
       <div class="metric"><span>Max edit</span><strong>${formatPct(maxEdit, 2)}%</strong></div>
       <div class="metric"><span>Signal</span><strong>${escapeHtml(getSignalLabel(settings.signalMode))}</strong></div>
+      <div class="metric"><span>Sample filter</span><strong>${escapeHtml(sampleRangeText)}</strong></div>
     </div>
     <section class="figure">
       <h2>Mutation Heatmap</h2>
@@ -2891,7 +3069,7 @@
     </section>
     <section>
       <h2>Methods Notes</h2>
-      <p class="note">FASTQ records were parsed, QC-filtered, unique-read aggregated, aligned in both orientations, filtered at ${formatPct(settings.minIdentity * 100, 1)}% minimum alignment identity, and summarized at 1-based amplicon coordinates. Edit percentages use position-level covered reads as the denominator; terminal no-coverage gaps are not counted as deletion edits.</p>
+      <p class="note">FASTQ records were parsed, QC-filtered, unique-read aggregated, aligned in both orientations, filtered at ${formatPct(settings.minIdentity * 100, 1)}% minimum alignment identity, and summarized at 1-based amplicon coordinates. Sample number filter: ${escapeHtml(sampleRangeText)}. Edit percentages use position-level covered reads as the denominator; terminal no-coverage gaps are not counted as deletion edits.</p>
       <p>Current limitations: paired-end files are grouped but not merged into consensus reads; adapter trimming is not performed.</p>
     </section>
   </main>
@@ -2973,6 +3151,7 @@
         else if (kind === 'mutation') download('processed_mutation_table.csv', buildMutationCsv(), 'text/csv;charset=utf-8');
         else if (kind === 'allele') download('allele_spectrum_table.csv', buildAlleleCsv(), 'text/csv;charset=utf-8');
         else if (kind === 'qc') download('qc_read_counts.csv', buildQcCsv(), 'text/csv;charset=utf-8');
+        else if (kind === 'summary-json') download('amplicon_run_summary.json', buildSummaryJson(), 'application/json;charset=utf-8');
         else if (kind === 'report') download('amplicon_run_report.md', buildReport(), 'text/markdown;charset=utf-8');
         else if (kind === 'html-report') download('amplicon_run_report.html', buildHtmlReport(), 'text/html;charset=utf-8');
         setStep('export', ['setup', 'upload', 'process', 'results']);
@@ -3031,6 +3210,8 @@
         els.minLen.value = '30';
         els.readLimit.value = '50000';
         els.minIdentity.value = '80';
+        els.sampleStart.value = '';
+        els.sampleEnd.value = '';
         els.signalMode.value = 'all';
         els.expectedEdit.value = '';
         els.assayType.value = 'custom';
@@ -3062,6 +3243,8 @@
         els.minLen.value = '30';
         els.readLimit.value = '50000';
         els.minIdentity.value = '80';
+        els.sampleStart.value = '';
+        els.sampleEnd.value = '';
         els.signalMode.value = 'all';
         els.expectedEdit.value = '';
         els.assayType.value = 'custom';
@@ -3096,6 +3279,8 @@
           els.minLen.value = '30';
           els.readLimit.value = '25000';
           els.minIdentity.value = '80';
+          els.sampleStart.value = '';
+          els.sampleEnd.value = '';
           els.signalMode.value = 'substitution';
           els.expectedEdit.value = PUBLIC_BENCHMARK.expectedEdit;
           els.assayType.value = 'cas';
@@ -3141,6 +3326,7 @@
           minLen: settings.minLen,
           readLimit: settings.readLimit,
           minIdentity: settings.minIdentity,
+          sampleNumberFilter: serializableSampleRange(settings.sampleRange),
           signalMode: settings.signalMode,
           expectedEdit: settings.expectedEdit
         }, null, 2);
@@ -3149,7 +3335,12 @@
 
       function bindEvents() {
         $('pickBtn').onclick = () => els.fileInput.click();
+        $('folderBtn').onclick = () => els.folderInput.click();
         els.fileInput.onchange = (event) => {
+          addFiles(event.target.files);
+          event.target.value = '';
+        };
+        els.folderInput.onchange = (event) => {
           addFiles(event.target.files);
           event.target.value = '';
         };
@@ -3171,6 +3362,7 @@
         $('mutationCsvBtn').onclick = () => exportByKind('mutation');
         $('alleleCsvBtn').onclick = () => exportByKind('allele');
         $('qcCsvBtn').onclick = () => exportByKind('qc');
+        $('summaryJsonBtn').onclick = () => exportByKind('summary-json');
         $('reportBtn').onclick = () => exportByKind('report');
         $('htmlReportBtn').onclick = () => exportByKind('html-report');
         els.siteSelect.onchange = (event) => {
@@ -3228,7 +3420,7 @@
           renderFigure();
         };
         els.siteManifest.oninput = renderPreflight;
-        [els.minQ, els.minLen, els.readLimit, els.minIdentity, els.dropN].forEach((control) => {
+        [els.minQ, els.minLen, els.readLimit, els.minIdentity, els.sampleStart, els.sampleEnd, els.dropN].forEach((control) => {
           control.oninput = renderPreflight;
           control.onchange = renderPreflight;
         });

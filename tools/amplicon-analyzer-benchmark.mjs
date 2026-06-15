@@ -942,14 +942,15 @@ function buildSvgFigure(run) {
   const left = compact ? 116 : 154;
   const right = 76;
   const top = 48;
-  const bottom = 74;
+  const bottom = 96;
+  const sequenceH = compact ? 16 : 20;
   const width = Math.max(860, left + cols.length * cellW + right);
-  const height = top + samples.length * rowH + bottom;
+  const height = top + samples.length * rowH + sequenceH + bottom;
   const signalLabel = getSignalLabel(run.settings.signalMode);
 
   let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="Amplicon mutation heatmap">`;
   svg += '<rect width="100%" height="100%" fill="#ffffff"/>';
-  svg += '<style>.title{font:700 13px Arial,sans-serif;fill:#18212b}.axis{font:10px Arial,sans-serif;fill:#4c5b68}.row{font:11px Arial,sans-serif;fill:#18212b}.tiny{font:9px Arial,sans-serif;fill:#687786}.warn{fill:#b42318}</style>';
+  svg += '<style>.title{font:700 13px Arial,sans-serif;fill:#18212b}.axis{font:10px Arial,sans-serif;fill:#4c5b68}.row{font:11px Arial,sans-serif;fill:#18212b}.base{font:700 9px Arial,sans-serif;fill:#18212b}.tiny{font:9px Arial,sans-serif;fill:#687786}.warn{fill:#b42318}</style>';
   svg += `<text x="14" y="20" class="title">${escapeHtml(run.runName)}</text>`;
   svg += `<text x="14" y="38" class="axis">${escapeHtml(signalLabel)} - generated ${escapeHtml(run.createdAt)}</text>`;
 
@@ -969,9 +970,17 @@ function buildSvgFigure(run) {
       const x = left + colIndex * cellW;
       const target = targets.has(row.position);
       const fill = low ? '#e1e6ec' : heatColor(row.percent);
-      svg += `<rect x="${x}" y="${y}" width="${Math.max(3, cellW - 1)}" height="${rowH - 1}" fill="${fill}" stroke="${target ? '#b42318' : '#ffffff'}" stroke-width="${target ? 1.5 : 0.6}"><title>${escapeHtml(sample.sample)} position ${row.position}: ${formatNumber(row.percent, 2)}%</title></rect>`;
+      svg += `<rect x="${x}" y="${y}" width="${Math.max(3, cellW - 1)}" height="${rowH - 1}" fill="${fill}" stroke="${target ? '#b42318' : '#111827'}" stroke-width="${target ? 1.5 : 0.45}"><title>${escapeHtml(sample.sample)} position ${row.position}: ${formatNumber(row.percent, 2)}%</title></rect>`;
     });
     svg += `<text x="${left + cols.length * cellW + 8}" y="${y + rowH * 0.72}" class="axis">${formatNumber(sample.maxPercent, 1)}%</text>`;
+  });
+
+  const sequenceY = top + samples.length * rowH + (compact ? 13 : 16);
+  svg += `<text x="${left - 8}" y="${sequenceY}" text-anchor="end" class="axis">Reference</text>`;
+  cols.forEach((col, idx) => {
+    const x = left + idx * cellW + cellW / 2;
+    const cls = targets.has(col.position) ? 'warn' : 'base';
+    if (cellW >= 7) svg += `<text x="${x}" y="${sequenceY}" text-anchor="middle" class="${cls}">${escapeHtml(col.refBase)}</text>`;
   });
 
   svg += buildLegend(left, height - 42);
@@ -994,7 +1003,7 @@ function buildLegend(x, y) {
     svg += `<rect x="${x + idx * 50}" y="${y}" width="40" height="12" fill="${heatColor(value)}" stroke="#d8e1ea"/>`;
     svg += `<text x="${x + idx * 50}" y="${y + 29}" class="tiny">${value}%</text>`;
   });
-  svg += `<text x="14" y="${y + 29}" class="tiny">Red outline: target position; gray row: below minimum reads</text>`;
+  svg += `<text x="14" y="${y + 29}" class="tiny">Black grid: amplicon bases; red outline/text: target position; gray row: below minimum reads</text>`;
   svg += '</g>';
   return svg;
 }

@@ -1,6 +1,6 @@
 # CRISPResso2 EMX1 Base Editor Public FASTQ Benchmark
 
-- Created: 2026-06-15T07:40:51.130Z
+- Created: 2026-06-15T10:13:03.766Z
 - Dataset: CRISPResso2 base-editor example
 - Source: https://docs.crispresso.com/latest/core/examples.html
 - FASTQ: https://crispresso.com/static/demo/base_editor.fastq.gz
