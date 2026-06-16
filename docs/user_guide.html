@@ -112,8 +112,9 @@
         <li>Paste the full expected PCR amplicon sequence into <strong>Reference amplicon sequence</strong>.</li>
         <li>Select an <strong>Assay type</strong>: Custom window, Cas / CRISPR, or TALE / TALEN.</li>
         <li>Optional: add extra site rows in <strong>Additional sites</strong>.</li>
+        <li>Optional: import a legacy setting CSV to fill the reference and target window automatically.</li>
         <li>Add FASTQ, FASTQ.GZ, joined FASTQ text files, or choose a folder.</li>
-        <li>Optional: set a first/last sample number to process only numbered sample groups.</li>
+        <li>Optional: set a first/last sample number to process only numbered sample groups. Keep <strong>Expected sample count</strong> at 96 for 96-well batches.</li>
         <li>Optional: choose an <strong>Expected base edit</strong> such as C&gt;T or A&gt;G.</li>
         <li>Click <strong>Run analysis</strong>.</li>
         <li>Review QC, the heatmap, the processed table, and the allele spectrum.</li>
@@ -130,10 +131,12 @@
           <tr><td><code>.fastq</code>, <code>.fq</code></td><td>Plain FASTQ files.</td></tr>
           <tr><td><code>.fastq.gz</code>, <code>.fq.gz</code></td><td>Gzip-compressed FASTQ files in browsers that support <code>DecompressionStream</code>.</td></tr>
           <tr><td><code>.fastjoin</code>, <code>.fastqjoin</code>, <code>.fqjoin</code>, <code>.join</code>, <code>.txt</code></td><td>Joined or concatenated FASTQ text files.</td></tr>
+          <tr><td>Legacy setting CSV</td><td>Optional CSV with <code>arg</code>, <code>opts</code>, and <code>run_align_mutations</code> rows.</td></tr>
           <tr><td>Reference amplicon</td><td>The full expected PCR amplicon sequence, using A/C/G/T/N bases.</td></tr>
         </tbody>
       </table>
       <p>The file picker accepts individual files. The folder picker accepts a directory of many FASTQ-like files through browser-local file access.</p>
+      <p>Illumina-style names such as <code>97_S97_L001_R1_001.fastq.gz</code> are normalized to sample <code>97</code>, matching joined files such as <code>97.fastqjoin</code>. Do not load joined and raw R1/R2 files for the same sample unless double counting is intended.</p>
       <p>R1/R2 files are grouped by inferred sample name. Each read is evaluated against the reference in forward and reverse-complement orientations.</p>
       <p class="note"><strong>Reference</strong> is the full alignment target. <strong>Targeting window</strong> is the smaller region within the reference that is highlighted in the heatmap.</p>
     </section>
@@ -170,6 +173,7 @@ site_C, ACGTACGT..., 12,18,22</code></pre>
           <tr><td>Read limit per sample</td><td>Maximum reads processed per sample group.</td></tr>
           <tr><td>Minimum alignment identity (%)</td><td>Reads that pass FASTQ QC but align below this threshold are excluded from mutation calling.</td></tr>
           <tr><td>First/last sample number</td><td>Optional filter for large numbered batches. Files without a number are skipped while this filter is active.</td></tr>
+          <tr><td>Expected sample count</td><td>Preflight warning threshold for numbered batches. Default is 96.</td></tr>
           <tr><td>Edit signal shown in heatmap</td><td>Heatmap signal: substitution + indel, substitution only, or indel only.</td></tr>
           <tr><td>Expected base edit</td><td>Expected conversion model for base-editor summaries and exports.</td></tr>
           <tr><td>Exclude reads containing N bases</td><td>Removes reads with ambiguous bases during QC.</td></tr>
@@ -178,7 +182,13 @@ site_C, ACGTACGT..., 12,18,22</code></pre>
     </section>
 
     <section class="panel">
-      <h2>6. Results</h2>
+      <h2>6. 96-Sample Batch Runs</h2>
+      <p>For routine 96-sample batches, import the setting CSV, choose the fastqjoin or FASTQ.GZ folder, and confirm that preflight reports 96 selected sample groups.</p>
+      <p>Legacy setting CSV import maps <code>--user_region_beg_offset</code> and <code>--user_region_length</code> to 1-based amplicon target positions. For example, if the site starts at position 61, <code>--user_region_beg_offset 32 --user_region_length 55</code> becomes target positions <code>29-83</code>.</p>
+    </section>
+
+    <section class="panel">
+      <h2>7. Results</h2>
       <ul>
         <li><strong>Overview</strong>: site summary, sample-level QC-passed reads, alignment-passed reads, unique reads, mean Q, mean identity, max edit rate, and target source.</li>
         <li><strong>Expected edit summary</strong>: target-window expected conversion rate when a base-edit model is selected.</li>
@@ -190,7 +200,7 @@ site_C, ACGTACGT..., 12,18,22</code></pre>
     </section>
 
     <section class="panel">
-      <h2>7. Exports</h2>
+      <h2>8. Exports</h2>
       <table>
         <thead><tr><th>File</th><th>Purpose</th></tr></thead>
         <tbody>
@@ -207,7 +217,7 @@ site_C, ACGTACGT..., 12,18,22</code></pre>
     </section>
 
     <section class="panel">
-      <h2>8. Calculation</h2>
+      <h2>9. Calculation</h2>
       <p>For each sample and position, edit percentage is calculated as:</p>
       <pre><code>edit percentage = selected signal reads at position / position-level covered reads * 100</code></pre>
       <p>Coordinates are 1-based amplicon positions. The heatmap uses a black grid for amplicon bases, red outlines and labels for target positions, and a reference sequence row below the figure. Terminal no-coverage gaps are not counted as deletion edits.</p>
@@ -215,7 +225,7 @@ site_C, ACGTACGT..., 12,18,22</code></pre>
     </section>
 
     <section class="panel">
-      <h2>9. Public FASTQ Benchmark</h2>
+      <h2>10. Public FASTQ Benchmark</h2>
       <p>Amplicon Analyzer includes a reproducible fixture using the CRISPResso2 EMX1 base-editor example FASTQ dataset.</p>
       <table>
         <thead><tr><th>Metric</th><th>Result</th></tr></thead>
@@ -234,7 +244,7 @@ site_C, ACGTACGT..., 12,18,22</code></pre>
     </section>
 
     <section class="panel">
-      <h2>10. Current Scope</h2>
+      <h2>11. Current Scope</h2>
       <ul>
         <li>FASTQ parsing, QC, unique-read aggregation, reference alignment, and mutation calling are performed in the app.</li>
         <li>Paired-end files are grouped by sample, but paired-end consensus merging is not performed.</li>

@@ -740,6 +740,14 @@
             <p class="hint">Use A/C/G/T/N bases. Reads are evaluated in forward and reverse-complement orientations.</p>
           </div>
           <div class="field">
+            <label for="settingCsvInput">Legacy setting CSV</label>
+            <input id="settingCsvInput" class="file-input" type="file" accept=".csv,text/csv">
+            <div class="btns" style="margin-top:8px">
+              <button class="btn" id="settingCsvBtn" type="button">Import setting CSV</button>
+            </div>
+            <p class="hint">Imports legacy rows such as arg/aseq, arg/site, opts, and run_align_mutations. The app maps the legacy region window to 1-based target positions.</p>
+          </div>
+          <div class="field">
             <label for="assayType">Assay type</label>
             <select id="assayType">
               <option value="custom">Custom window</option>
@@ -832,6 +840,10 @@
               <label for="sampleEnd">Last sample number</label>
               <input id="sampleEnd" type="number" min="0" step="1" placeholder="All">
             </div>
+          </div>
+          <div class="field">
+            <label for="expectedSampleCount">Expected sample count</label>
+            <input id="expectedSampleCount" type="number" min="1" step="1" value="96">
           </div>
           <p class="hint">Optional filename filter for numbered samples. Files without a number are skipped while this filter is active.</p>
           <div class="field">
@@ -993,6 +1005,7 @@
         signalMode: $('signalMode'),
         expectedEdit: $('expectedEdit'),
         dropN: $('dropN'),
+        settingCsvInput: $('settingCsvInput'),
         fileInput: $('fileInput'),
         folderInput: $('folderInput'),
         drop: $('drop'),
@@ -1009,6 +1022,7 @@
         log: $('log'),
         sampleStart: $('sampleStart'),
         sampleEnd: $('sampleEnd'),
+        expectedSampleCount: $('expectedSampleCount'),
         figureWrap: $('figureWrap'),
         siteSelect: $('siteSelect'),
         tabBody: $('tabBody'),
@@ -1213,10 +1227,18 @@
       function inferSampleName(name) {
         return String(name)
           .replace(/\.(fastq|fq|fastjoin|fastqjoin|fqjoin|join|txt)(\.gz)?$/i, '')
+          .replace(/_S\d+_L\d{3}_R[12]_001$/i, '')
+          .replace(/_S\d+_L\d{3}$/i, '')
           .replace(/_R[12]_001$/i, '')
           .replace(/[_\-.]R[12]$/i, '')
           .replace(/[_\-.][12]$/i, '')
           .replace(/\s+/g, '_') || 'sample';
+      }
+
+      function inputKind(name) {
+        if (/\.(fastjoin|fastqjoin|fqjoin|join|txt)(\.gz)?$/i.test(name)) return 'joined';
+        if (/\.(fastq|fq)(\.gz)?$/i.test(name)) return 'raw';
+        return 'unknown';
       }
 
       function sampleNumberFromName(value) {
@@ -1244,6 +1266,13 @@
         };
       }
 
+      function expectedSampleCount() {
+        const raw = String(els.expectedSampleCount?.value || '').trim();
+        if (!raw) return 0;
+        const value = Number(raw);
+        return Number.isFinite(value) && value > 0 && Number.isInteger(value) ? value : 0;
+      }
+
       function sampleInRange(sample, range) {
         if (!range.active || range.warning) return true;
         const sampleNumber = sampleNumberFromName(sample);
@@ -1257,12 +1286,22 @@
         const groups = new Map();
         for (const file of files) {
           const sample = inferSampleName(file.name);
-          if (!groups.has(sample)) groups.set(sample, { sample, files: [], roles: new Set() });
+          if (!groups.has(sample)) groups.set(sample, { sample, files: [], roles: new Set(), kinds: new Set() });
           const group = groups.get(sample);
           group.files.push(file);
           group.roles.add(inferReadRole(file.name));
+          group.kinds.add(inputKind(file.name));
         }
-        return Array.from(groups.values()).sort((a, b) => a.sample.localeCompare(b.sample));
+        return Array.from(groups.values()).sort(compareSampleGroups);
+      }
+
+      function compareSampleGroups(a, b) {
+        const an = sampleNumberFromName(a.sample);
+        const bn = sampleNumberFromName(b.sample);
+        if (an != null && bn != null && an !== bn) return an - bn;
+        if (an != null && bn == null) return -1;
+        if (an == null && bn != null) return 1;
+        return a.sample.localeCompare(b.sample, undefined, { numeric: true, sensitivity: 'base' });
       }
 
       function groupFiles(files, range = getSampleNumberRange()) {
@@ -1282,6 +1321,7 @@
         const sampleRange = getSampleNumberRange();
         const groups = groupFiles(state.files, sampleRange);
         const skippedGroups = skippedGroupsForRange(state.files, sampleRange);
+        const expectedCount = expectedSampleCount();
         const settings = getSettings(reference);
         const targetPositions = Array.from(settings.targets).sort((a, b) => a - b);
         const warnings = [];
@@ -1295,6 +1335,8 @@
         if (!state.files.length) warnings.push('No FASTQ files have been added.');
         if (sampleRange.warning) warnings.push(sampleRange.warning);
         if (state.files.length && sampleRange.active && !sampleRange.warning && !groups.length) warnings.push('No sample groups match the sample number filter.');
+        if (state.files.length && expectedCount && groups.length && groups.length !== expectedCount) warnings.push(`Expected ${expectedCount} sample groups, but ${groups.length} are selected.`);
+        if (groups.some((group) => group.kinds && group.kinds.has('joined') && group.kinds.has('raw'))) warnings.push('Joined FASTQ and raw FASTQ files are mixed in at least one sample group; keep one input type to avoid double counting.');
         if (!targetPositions.length) warnings.push('No target positions are currently defined.');
         if (settings.targetWarning) warnings.push(settings.targetWarning);
         if (state.files.some((file) => /\.gz$/i.test(file.name)) && !('DecompressionStream' in window)) warnings.push('This browser cannot decompress FASTQ.GZ files.');
@@ -1313,6 +1355,7 @@
             <div class="preflight-row"><span>Sites</span><strong>${formatInt(siteConfigs.length)} site${siteConfigs.length === 1 ? '' : 's'}</strong></div>
             <div class="preflight-row"><span>Samples</span><strong>${escapeHtml(sampleText)}</strong></div>
             <div class="preflight-row"><span>Sample number filter</span><strong>${escapeHtml(sampleRange.active ? `${sampleRange.label} (${groups.length} selected, ${skippedGroups.length} skipped)` : 'all samples')}</strong></div>
+            <div class="preflight-row"><span>Expected sample count</span><strong>${escapeHtml(expectedCount ? `${expectedCount}` : 'not checked')}</strong></div>
             <div class="preflight-row"><span>Assay inference</span><strong>${escapeHtml(settings.targetSource)}</strong></div>
             <div class="preflight-row"><span>Target positions</span><strong>${escapeHtml(targetPositions.join(', ') || 'none')}</strong></div>
             <div class="preflight-row"><span>Expected edit</span><strong>${escapeHtml(settings.expectedEdit ? settings.expectedEdit.label : 'not specified')}</strong></div>
@@ -1320,6 +1363,112 @@
           </div>
           <ul class="warning-list">${warnings.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
         `;
+      }
+
+      function parseCsvLine(line) {
+        const cells = [];
+        let cell = '';
+        let quoted = false;
+        for (let i = 0; i < line.length; i += 1) {
+          const char = line[i];
+          if (char === '"') {
+            if (quoted && line[i + 1] === '"') {
+              cell += '"';
+              i += 1;
+            } else {
+              quoted = !quoted;
+            }
+          } else if (char === ',' && !quoted) {
+            cells.push(cell.trim());
+            cell = '';
+          } else {
+            cell += char;
+          }
+        }
+        cells.push(cell.trim());
+        return cells;
+      }
+
+      function parseLegacySettingCsv(text) {
+        const rows = String(text || '').split(/\r?\n/).map(parseCsvLine).filter((row) => row.some(Boolean));
+        const args = new Map();
+        const opts = new Map();
+        let runRow = null;
+        rows.forEach((row) => {
+          const kind = String(row[0] || '').trim();
+          const key = String(row[1] || '').trim();
+          if (kind === 'arg' && key) args.set(key, row[2] || '');
+          if (kind === 'opts' && key) opts.set(key, row[2] || '');
+          if (kind === 'run_align_mutations') runRow = row;
+        });
+        if (!runRow) throw new Error('Setting CSV does not contain a run_align_mutations row.');
+        const optsKey = runRow[1] || '';
+        const referenceKey = runRow[2] || Array.from(args.keys()).find((key) => /^aseq/i.test(key));
+        const siteKey = runRow[3] || Array.from(args.keys()).find((key) => /^site/i.test(key));
+        const reference = normalizeSeq(args.get(referenceKey));
+        const site = normalizeSeq(args.get(siteKey));
+        if (reference.length < 20) throw new Error(`Setting CSV reference ${referenceKey || ''} is missing or too short.`);
+        if (!site) throw new Error(`Setting CSV site sequence ${siteKey || ''} is missing.`);
+        const siteIndex = reference.indexOf(site);
+        if (siteIndex < 0) throw new Error('Setting CSV site sequence was not found in the reference amplicon.');
+        const optionText = opts.get(optsKey) || '';
+        const lengthMatch = optionText.match(/--user_region_length\s+(\d+)/i);
+        const offsetMatch = optionText.match(/--user_region_beg_offset\s+(\d+)/i);
+        const siteStart = siteIndex + 1;
+        let targetStart = siteStart;
+        let targetEnd = siteStart + site.length - 1;
+        let targetSource = `site sequence ${siteKey}`;
+        if (lengthMatch && offsetMatch) {
+          const regionLength = Number(lengthMatch[1]);
+          const beginOffset = Number(offsetMatch[1]);
+          targetStart = Math.max(1, siteStart - beginOffset);
+          targetEnd = Math.min(reference.length, targetStart + regionLength - 1);
+          targetSource = `${optsKey || 'opts'} user region (${regionLength} bp, begin offset ${beginOffset})`;
+        }
+        const files = runRow.slice(4).map((value) => value.trim()).filter((value) => /\.(fastq|fq|fastjoin|fastqjoin|fqjoin|join)(\.gz)?$/i.test(value));
+        const numbers = files.map(sampleNumberFromName).filter((value) => value != null).sort((a, b) => a - b);
+        return {
+          reference,
+          site,
+          siteStart,
+          siteEnd: siteStart + site.length - 1,
+          targets: `${targetStart}-${targetEnd}`,
+          targetSource,
+          files,
+          firstSample: numbers.length ? numbers[0] : null,
+          listedSampleCount: numbers.length
+        };
+      }
+
+      async function importSettingCsv() {
+        const file = els.settingCsvInput.files && els.settingCsvInput.files[0];
+        if (!file) {
+          addLog('Choose a setting CSV file first.', 'warn');
+          return;
+        }
+        try {
+          const parsed = parseLegacySettingCsv(await file.text());
+          const expectedCount = expectedSampleCount() || 96;
+          els.runName.value = file.name.replace(/\.csv$/i, '').replace(/[_-]+setting$/i, '') || 'Amplicon analysis run';
+          els.referenceSeq.value = parsed.reference;
+          els.assayType.value = 'custom';
+          renderAssayFields();
+          els.targets.value = parsed.targets;
+          if (parsed.firstSample != null) {
+            els.sampleStart.value = String(parsed.firstSample);
+            els.sampleEnd.value = String(parsed.firstSample + expectedCount - 1);
+          }
+          addLog(`Imported setting CSV: ${parsed.reference.length} bp reference, target positions ${parsed.targets}, site ${parsed.siteStart}-${parsed.siteEnd}.`, 'ok');
+          if (parsed.listedSampleCount && parsed.listedSampleCount !== expectedCount) {
+            addLog(`Setting CSV lists ${parsed.listedSampleCount} file(s); using expected ${expectedCount}-sample range from ${parsed.firstSample} to ${parsed.firstSample + expectedCount - 1}.`, 'warn');
+          }
+          renderPreflight();
+          renderFigure();
+          renderTab();
+          setStep('setup', []);
+        } catch (error) {
+          addLog(error.message || String(error), 'bad');
+        }
       }
 
       async function readTextFile(file) {
@@ -1344,6 +1493,7 @@
           minIdentity: Math.max(0, Math.min(100, Number(els.minIdentity.value) || 0)) / 100,
           dropN: els.dropN.checked,
           minDepth: Math.max(0, Number(els.minDepth.value) || 0),
+          expectedSampleCount: expectedSampleCount(),
           signalMode: els.signalMode.value,
           expectedEdit: parseExpectedEdit(els.expectedEdit.value),
           sampleRange: getSampleNumberRange(),
@@ -1762,6 +1912,7 @@
         setStep('process', ['setup', 'upload']);
         setProgress(2, 'Reading FASTQ files.');
         addLog(`Starting analysis for ${fileGroups.length} sample group(s) across ${siteConfigs.length} site(s).`, 'info');
+        if (primarySettings.expectedSampleCount && fileGroups.length !== primarySettings.expectedSampleCount) addLog(`Expected ${primarySettings.expectedSampleCount} sample group(s), but ${fileGroups.length} are selected.`, 'warn');
         if (sampleRange.active) addLog(`Sample number filter ${sampleRange.label}: ${fileGroups.length} group(s) selected, ${skippedGroups.length} skipped.`, 'info');
         if (primarySettings.targetWarning) addLog(primarySettings.targetWarning, 'warn');
         else if (primarySettings.assayType !== 'custom') addLog(primarySettings.targetSource, 'ok');
@@ -3212,6 +3363,7 @@
         els.minIdentity.value = '80';
         els.sampleStart.value = '';
         els.sampleEnd.value = '';
+        els.expectedSampleCount.value = '96';
         els.signalMode.value = 'all';
         els.expectedEdit.value = '';
         els.assayType.value = 'custom';
@@ -3245,6 +3397,7 @@
         els.minIdentity.value = '80';
         els.sampleStart.value = '';
         els.sampleEnd.value = '';
+        els.expectedSampleCount.value = '4';
         els.signalMode.value = 'all';
         els.expectedEdit.value = '';
         els.assayType.value = 'custom';
@@ -3281,6 +3434,7 @@
           els.minIdentity.value = '80';
           els.sampleStart.value = '';
           els.sampleEnd.value = '';
+          els.expectedSampleCount.value = '1';
           els.signalMode.value = 'substitution';
           els.expectedEdit.value = PUBLIC_BENCHMARK.expectedEdit;
           els.assayType.value = 'cas';
@@ -3327,6 +3481,7 @@
           readLimit: settings.readLimit,
           minIdentity: settings.minIdentity,
           sampleNumberFilter: serializableSampleRange(settings.sampleRange),
+          expectedSampleCount: settings.expectedSampleCount,
           signalMode: settings.signalMode,
           expectedEdit: settings.expectedEdit
         }, null, 2);
@@ -3336,6 +3491,8 @@
       function bindEvents() {
         $('pickBtn').onclick = () => els.fileInput.click();
         $('folderBtn').onclick = () => els.folderInput.click();
+        $('settingCsvBtn').onclick = () => els.settingCsvInput.click();
+        els.settingCsvInput.onchange = importSettingCsv;
         els.fileInput.onchange = (event) => {
           addFiles(event.target.files);
           event.target.value = '';
@@ -3420,7 +3577,7 @@
           renderFigure();
         };
         els.siteManifest.oninput = renderPreflight;
-        [els.minQ, els.minLen, els.readLimit, els.minIdentity, els.sampleStart, els.sampleEnd, els.dropN].forEach((control) => {
+        [els.minQ, els.minLen, els.readLimit, els.minIdentity, els.sampleStart, els.sampleEnd, els.expectedSampleCount, els.dropN].forEach((control) => {
           control.oninput = renderPreflight;
           control.onchange = renderPreflight;
         });

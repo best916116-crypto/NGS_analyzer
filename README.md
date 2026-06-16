@@ -11,6 +11,7 @@ https://best916116-crypto.github.io/NGS_analyzer/
 ## What You Can Do
 
 - Drag and drop `.fastq`, `.fq`, `.fastq.gz`, `.fq.gz`, joined FASTQ text files, or choose a folder
+- Import legacy setting CSV files that define `aseq`, `site`, `opts`, and `run_align_mutations`
 - Paste a reference amplicon sequence and target positions
 - Run read QC, unique-read aggregation, reference alignment, and mutation calling
 - Track expected base-editor conversions such as `C>T` or `A>G`
@@ -24,12 +25,13 @@ https://best916116-crypto.github.io/NGS_analyzer/
 2. Paste or confirm the reference amplicon sequence.
 3. Choose the assay type: `Custom window`, `Cas / CRISPR`, or `TALE / TALEN`.
 4. Optional: add extra site rows in the multi-site manifest.
-5. Drag in FASTQ files, choose files, or choose a folder.
-6. Optional: set a first/last sample number to process only numbered sample groups.
-7. Review the preflight panel.
-8. Click `Run analysis`.
-9. Review QC, heatmap, processed table, and allele spectrum.
-10. Export the files needed for downstream analysis or slides.
+5. Optional: import a legacy setting CSV to fill the reference and target window automatically.
+6. Drag in FASTQ files, choose files, or choose a folder.
+7. Optional: set a first/last sample number to process only numbered sample groups. For 96-well batches, keep `Expected sample count` at `96`.
+8. Review the preflight panel.
+9. Click `Run analysis`.
+10. Review QC, heatmap, processed table, and allele spectrum.
+11. Export the files needed for downstream analysis or slides.
 
 ## Input Files
 
@@ -41,6 +43,7 @@ Required:
 | `.fastq.gz` / `.fq.gz` | Gzip-compressed FASTQ files in browsers that support `DecompressionStream` |
 | `.fastjoin` / `.fastqjoin` / `.fqjoin` / `.join` / `.txt` | Joined or concatenated FASTQ text files |
 | reference amplicon sequence | A/C/G/T/N bases pasted into the app |
+| legacy setting CSV | Optional CSV with `arg`, `opts`, and `run_align_mutations` rows |
 | additional site manifest | Optional rows for multi-site analysis |
 
 The file picker accepts individual files, and the folder picker accepts a directory of many FASTQ-like files. Folder upload uses browser-local file access; files are still processed locally and are not uploaded to a server.
@@ -50,6 +53,19 @@ The reference should be the full expected PCR amplicon sequence used for alignme
 Paired-end files are grouped by sample name when filenames contain common `R1` / `R2` markers. Reads are aligned independently against the reference, and reverse-complement orientation is tested automatically. Current limitation: paired-end consensus merging is not performed.
 
 For large numbered batches, use `First sample number` and `Last sample number` to process only matching inferred sample groups. Files without a number are skipped while this filter is active.
+
+For Illumina-style filenames such as `97_S97_L001_R1_001.fastq.gz`, the displayed sample is normalized to `97`. Joined files such as `97.fastqjoin` use the same sample name, so do not load joined and raw R1/R2 files for the same sample in one run unless you intentionally want to double count reads. The preflight panel warns when joined and raw files are mixed in the same sample group.
+
+## 96-Sample Batch Workflow
+
+Amplicon Analyzer is optimized for numbered 96-sample batches:
+
+1. Import the legacy setting CSV.
+2. Choose the `fastqjoin` folder or the raw FASTQ.GZ folder.
+3. Set `First sample number` and `Last sample number` if needed.
+4. Confirm that preflight reports `96` selected sample groups.
+
+Legacy setting CSV import maps `--user_region_beg_offset` and `--user_region_length` to 1-based amplicon target positions. For example, if the site starts at position 61, `--user_region_beg_offset 32 --user_region_length 55` becomes target positions `29-83`.
 
 ## Multi-Site Analysis
 
@@ -150,6 +166,37 @@ Current benchmark result:
 Generated outputs are stored in `benchmarks/public/crispresso2_base_editor/results/`, including position-level CSV, allele-spectrum CSV, QC CSV, substitution matrix, target-window table, SVG heatmap, summary JSON, and Markdown report. The app can also export a self-contained HTML report from the browser UI.
 
 The app also includes a `Load public benchmark` button. It loads the same FASTQ fixture, reference amplicon, Cas spacer, PAM, and base-editor window into the browser UI so the benchmark can be reproduced without preparing files manually.
+
+## Local Batch Runner
+
+The CLI benchmark runner also supports local batch configs with a setting CSV and a folder of numbered FASTQ-like files:
+
+```json
+{
+  "runName": "mito_ND1 96-sample local run",
+  "settingCsv": "path/to/mito_ND1_setting.csv",
+  "dataset": {
+    "folder": "path/to/fastqjoin",
+    "preferredInput": "joined",
+    "sampleStart": 97,
+    "sampleEnd": 192,
+    "expectedSampleCount": 96
+  },
+  "settings": {
+    "readLimit": 50000,
+    "minQ": 20,
+    "minLen": 30,
+    "minIdentity": 0.8,
+    "dropN": true,
+    "signalMode": "all"
+  },
+  "outputs": {
+    "resultDir": "examples/local/mito_ND1_96/results"
+  }
+}
+```
+
+`examples/local/` is ignored by git so local raw-data-derived outputs are not committed accidentally.
 
 ## Repository Layout
 

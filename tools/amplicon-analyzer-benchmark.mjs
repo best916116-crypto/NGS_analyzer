@@ -9,31 +9,41 @@ const BASES = ['A', 'C', 'G', 'T', 'N'];
 function main() {
   const configPath = path.resolve(process.argv[2] || 'benchmarks/public/crispresso2_base_editor/config.json');
   const configDir = path.dirname(configPath);
-  const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  const config = JSON.parse(fs.readFileSync(configPath, 'utf8').replace(/^\uFEFF/, ''));
   const resultDir = path.resolve(configDir, config.outputs?.resultDir || 'results');
   fs.mkdirSync(resultDir, { recursive: true });
 
-  const reference = normalizeSeq(config.reference);
+  const legacy = config.settingCsv ? parseLegacySettingCsv(path.resolve(configDir, config.settingCsv)) : null;
+  const reference = normalizeSeq(config.reference || legacy?.reference);
   if (reference.length < 20) throw new Error('Reference amplicon sequence must be at least 20 bp.');
 
   const settings = normalizeSettings(config.settings);
-  const assay = deriveAssayTargets(reference, config.assay || {}, config.targetPositions || '');
-  const inputFile = path.resolve(configDir, config.dataset?.file || config.fastq || '');
-  if (!fs.existsSync(inputFile)) {
-    throw new Error(`FASTQ file not found: ${inputFile}`);
+  const targetPositions = config.targetPositions || legacy?.targetPositions || '';
+  const assay = deriveAssayTargets(reference, config.assay || {}, targetPositions);
+  const groups = collectInputGroups(config, configDir, legacy);
+  if (!groups.length) throw new Error('No FASTQ input files were found.');
+  const expectedCount = Number(config.dataset?.expectedSampleCount || 0);
+  if (expectedCount && groups.length !== expectedCount) {
+    console.warn(`Warning: expected ${expectedCount} sample group(s), found ${groups.length}.`);
   }
 
-  const sampleName = config.dataset?.sampleName || sampleNameFromFile(inputFile);
-  const inputFileLabel = config.dataset?.file || path.relative(configDir, inputFile).replace(/\\/g, '/');
-  const fastqText = readFastq(inputFile);
-  const parsed = parseFastqText(fastqText, settings);
-  const sample = analyzeSample({
-    sample: sampleName,
-    files: [path.basename(inputFile)],
-    roles: ['R1']
-  }, parsed, reference, settings);
+  const samples = groups.map((group, index) => {
+    const parsedGroup = emptyParsedGroup();
+    for (const filePath of group.paths) {
+      const parsed = parseFastqText(readFastq(filePath), settings);
+      mergeParsedGroup(parsedGroup, parsed);
+    }
+    const sample = analyzeSample({
+      sample: group.sample,
+      files: group.files,
+      roles: group.roles
+    }, parsedGroup, reference, settings);
+    console.log(`[${index + 1}/${groups.length}] ${group.sample}: ${sample.qc.passedReads} QC-passed, ${sample.qc.alignedReads} aligned`);
+    return sample;
+  });
 
-  const run = buildRunResult([sample], reference, settings, assay, config, inputFileLabel);
+  const inputFileLabel = config.dataset?.folder || config.dataset?.file || legacy?.settingCsv || '';
+  const run = buildRunResult(samples, reference, settings, assay, config, inputFileLabel);
   writeOutputs(resultDir, run);
   printSummary(run, resultDir);
 }
@@ -63,7 +73,151 @@ function readFastq(filePath) {
 }
 
 function sampleNameFromFile(filePath) {
-  return path.basename(filePath).replace(/(\.fastq|\.fq)(\.gz)?$/i, '');
+  return path.basename(filePath)
+    .replace(/\.(fastq|fq|fastjoin|fastqjoin|fqjoin|join|txt)(\.gz)?$/i, '')
+    .replace(/_S\d+_L\d{3}_R[12]_001$/i, '')
+    .replace(/_S\d+_L\d{3}$/i, '')
+    .replace(/_R[12]_001$/i, '')
+    .replace(/[_\-.]R[12]$/i, '')
+    .replace(/[_\-.][12]$/i, '')
+    .replace(/\s+/g, '_') || 'sample';
+}
+
+function collectInputGroups(config, configDir, legacy) {
+  const dataset = config.dataset || {};
+  let filePaths = [];
+  if (dataset.folder) {
+    const folder = path.resolve(configDir, dataset.folder);
+    filePaths = fs.readdirSync(folder)
+      .map((name) => path.join(folder, name))
+      .filter((filePath) => fs.statSync(filePath).isFile() && isFastqLike(filePath));
+  } else if (Array.isArray(dataset.files)) {
+    filePaths = dataset.files.map((file) => path.resolve(configDir, file));
+  } else if (dataset.file || config.fastq) {
+    filePaths = [path.resolve(configDir, dataset.file || config.fastq)];
+  } else if (legacy?.files?.length && legacy.baseDir) {
+    filePaths = legacy.files.map((file) => path.resolve(legacy.baseDir, file));
+  }
+
+  const preferredKind = dataset.preferredInput || '';
+  if (preferredKind === 'joined') filePaths = filePaths.filter(isJoinedFastq);
+  if (preferredKind === 'raw') filePaths = filePaths.filter((filePath) => !isJoinedFastq(filePath));
+
+  const start = dataset.sampleStart == null ? null : Number(dataset.sampleStart);
+  const end = dataset.sampleEnd == null ? null : Number(dataset.sampleEnd);
+  const explicitSingleSampleName = dataset.sampleName && filePaths.length === 1 ? dataset.sampleName : '';
+  const groups = new Map();
+  for (const filePath of filePaths) {
+    if (!fs.existsSync(filePath)) throw new Error(`FASTQ file not found: ${filePath}`);
+    const sample = explicitSingleSampleName || sampleNameFromFile(filePath);
+    const number = sampleNumberFromName(sample);
+    if (Number.isFinite(start) && (number == null || number < start)) continue;
+    if (Number.isFinite(end) && (number == null || number > end)) continue;
+    if (!groups.has(sample)) groups.set(sample, { sample, files: [], paths: [], roles: new Set() });
+    const group = groups.get(sample);
+    group.files.push(path.basename(filePath));
+    group.paths.push(filePath);
+    group.roles.add(inferReadRole(filePath));
+  }
+  return Array.from(groups.values())
+    .sort(compareGroups)
+    .map((group) => ({ ...group, roles: Array.from(group.roles) }));
+}
+
+function isFastqLike(filePath) {
+  return /\.(fastq|fq|fastjoin|fastqjoin|fqjoin|join|txt)(\.gz)?$/i.test(path.basename(filePath));
+}
+
+function isJoinedFastq(filePath) {
+  return /\.(fastjoin|fastqjoin|fqjoin|join|txt)(\.gz)?$/i.test(path.basename(filePath));
+}
+
+function inferReadRole(filePath) {
+  const name = path.basename(filePath);
+  if (/(^|[_\-.])R?1([_\-.]|$)/i.test(name) || /_R1_001/i.test(name)) return 'R1';
+  if (/(^|[_\-.])R?2([_\-.]|$)/i.test(name) || /_R2_001/i.test(name)) return 'R2';
+  return 'single';
+}
+
+function sampleNumberFromName(value) {
+  const match = String(value || '').match(/\d+/);
+  return match ? Number(match[0]) : null;
+}
+
+function compareGroups(a, b) {
+  const an = sampleNumberFromName(a.sample);
+  const bn = sampleNumberFromName(b.sample);
+  if (an != null && bn != null && an !== bn) return an - bn;
+  if (an != null && bn == null) return -1;
+  if (an == null && bn != null) return 1;
+  return a.sample.localeCompare(b.sample, undefined, { numeric: true, sensitivity: 'base' });
+}
+
+function parseLegacySettingCsv(settingCsv) {
+  const rows = fs.readFileSync(settingCsv, 'utf8')
+    .split(/\r?\n/)
+    .map(parseCsvLine)
+    .filter((row) => row.some(Boolean));
+  const args = new Map();
+  const opts = new Map();
+  let runRow = null;
+  for (const row of rows) {
+    if (row[0] === 'arg') args.set(row[1], row[2] || '');
+    if (row[0] === 'opts') opts.set(row[1], row[2] || '');
+    if (row[0] === 'run_align_mutations') runRow = row;
+  }
+  if (!runRow) throw new Error(`Legacy setting CSV has no run_align_mutations row: ${settingCsv}`);
+  const optsKey = runRow[1] || '';
+  const referenceKey = runRow[2] || Array.from(args.keys()).find((key) => /^aseq/i.test(key));
+  const siteKey = runRow[3] || Array.from(args.keys()).find((key) => /^site/i.test(key));
+  const reference = normalizeSeq(args.get(referenceKey));
+  const site = normalizeSeq(args.get(siteKey));
+  const siteIndex = reference.indexOf(site);
+  if (reference.length < 20 || !site || siteIndex < 0) throw new Error(`Could not map legacy setting CSV reference/site: ${settingCsv}`);
+  const optionText = opts.get(optsKey) || '';
+  const lengthMatch = optionText.match(/--user_region_length\s+(\d+)/i);
+  const offsetMatch = optionText.match(/--user_region_beg_offset\s+(\d+)/i);
+  const siteStart = siteIndex + 1;
+  let targetStart = siteStart;
+  let targetEnd = siteStart + site.length - 1;
+  if (lengthMatch && offsetMatch) {
+    const regionLength = Number(lengthMatch[1]);
+    const beginOffset = Number(offsetMatch[1]);
+    targetStart = Math.max(1, siteStart - beginOffset);
+    targetEnd = Math.min(reference.length, targetStart + regionLength - 1);
+  }
+  return {
+    settingCsv,
+    baseDir: path.dirname(settingCsv),
+    reference,
+    site,
+    targetPositions: `${targetStart}-${targetEnd}`,
+    files: runRow.slice(4).map((value) => value.trim()).filter(isFastqLike)
+  };
+}
+
+function parseCsvLine(line) {
+  const cells = [];
+  let cell = '';
+  let quoted = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    if (char === '"') {
+      if (quoted && line[i + 1] === '"') {
+        cell += '"';
+        i += 1;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (char === ',' && !quoted) {
+      cells.push(cell.trim());
+      cell = '';
+    } else {
+      cell += char;
+    }
+  }
+  cells.push(cell.trim());
+  return cells;
 }
 
 function normalizeSeq(value) {
@@ -201,6 +355,51 @@ function reverseComplementPattern(pattern) {
   return String(pattern || '').split('').reverse().map((base) => map[base] || 'N').join('');
 }
 
+function emptyParsedGroup() {
+  return {
+    estimatedRecords: 0,
+    totalRecords: 0,
+    keptRecords: 0,
+    malformedRecords: 0,
+    droppedShort: 0,
+    droppedQuality: 0,
+    droppedN: 0,
+    readLimitReached: false,
+    unique: new Map(),
+    meanQualityParts: [],
+    readLengths: []
+  };
+}
+
+function mergeParsedGroup(target, parsed) {
+  target.estimatedRecords += parsed.estimatedRecords;
+  target.totalRecords += parsed.totalRecords;
+  target.keptRecords += parsed.keptRecords;
+  target.malformedRecords += parsed.malformedRecords;
+  target.droppedShort += parsed.droppedShort;
+  target.droppedQuality += parsed.droppedQuality;
+  target.droppedN += parsed.droppedN;
+  target.readLimitReached = target.readLimitReached || parsed.readLimitReached;
+  if (parsed.keptRecords) target.meanQualityParts.push({ mean: parsed.meanQuality, n: parsed.keptRecords });
+  target.readLengths.push(...parsed.readLengths);
+  parsed.unique.forEach((value, sequence) => {
+    const current = target.unique.get(sequence) || { sequence, count: 0, qualitySum: 0 };
+    current.count += value.count;
+    current.qualitySum += value.qualitySum;
+    target.unique.set(sequence, current);
+  });
+  target.uniqueReads = target.unique.size;
+  target.meanQuality = groupMeanQuality(target);
+  target.meanReadLength = target.keptRecords ? target.readLengths.reduce((sum, value) => sum + value, 0) / target.keptRecords : 0;
+  target.medianReadLength = median(target.readLengths);
+}
+
+function groupMeanQuality(group) {
+  const total = group.meanQualityParts.reduce((sum, part) => sum + part.n, 0);
+  if (!total) return 0;
+  return group.meanQualityParts.reduce((sum, part) => sum + part.mean * part.n, 0) / total;
+}
+
 function parseFastqText(text, settings) {
   const lines = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
   const estimatedRecords = Math.floor(lines.length / 4);
@@ -270,6 +469,7 @@ function parseFastqText(text, settings) {
     uniqueReads: unique.size,
     meanQuality: qualityReads ? totalQuality / qualityReads : 0,
     meanReadLength: keptRecords ? basesKept / keptRecords : 0,
+    readLengths,
     medianReadLength: median(readLengths)
   };
 }
