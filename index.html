@@ -482,16 +482,55 @@
       padding: 14px 14px 10px;
       border-bottom: 1px solid var(--soft-line);
     }
+    .figure-toolbar {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px;
+      border: 1px solid var(--soft-line);
+      border-radius: 8px;
+      background: #f8fbfd;
+    }
+    .zoom-readout {
+      min-width: 48px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 900;
+    }
     .figure-wrap {
       min-height: 468px;
       overflow: auto;
       background: #fff;
-      display: grid;
-      place-items: center;
+      display: block;
       padding: 12px;
+      cursor: grab;
+      overscroll-behavior: contain;
     }
-    .figure-wrap svg {
-      max-width: 100%;
+    .figure-wrap.dragging {
+      cursor: grabbing;
+      user-select: none;
+    }
+    .figure-wrap.has-figure {
+      display: block;
+    }
+    .figure-wrap > .empty {
+      margin: 70px auto;
+    }
+    .figure-stage {
+      min-width: 100%;
+      min-height: 100%;
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-start;
+    }
+    .figure-canvas {
+      flex: 0 0 auto;
+      transform-origin: 0 0;
+    }
+    .figure-canvas svg {
+      width: 100%;
+      max-width: none;
       height: auto;
       display: block;
     }
@@ -674,6 +713,35 @@
       grid-template-columns: repeat(3, minmax(140px, 1fr));
       gap: 8px;
     }
+    .export-section {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .export-section h3 {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+    .sort-head {
+      border: 0;
+      background: transparent;
+      color: inherit;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font: inherit;
+      font-weight: 900;
+      cursor: pointer;
+    }
+    .sort-head span {
+      color: var(--accent);
+      font-size: 11px;
+      min-width: 10px;
+    }
 
     @media (max-width: 1180px) {
       .layout { grid-template-columns: 1fr; }
@@ -740,12 +808,13 @@
             <p class="hint">Use A/C/G/T/N bases. Reads are evaluated in forward and reverse-complement orientations.</p>
           </div>
           <div class="field">
-            <label for="settingCsvInput">Legacy setting CSV</label>
+            <label for="settingCsvInput">Setting CSV</label>
             <input id="settingCsvInput" class="file-input" type="file" accept=".csv,text/csv">
             <div class="btns" style="margin-top:8px">
               <button class="btn" id="settingCsvBtn" type="button">Import setting CSV</button>
+              <button class="btn" id="settingTemplateBtn" type="button">Download template</button>
             </div>
-            <p class="hint">Imports legacy rows such as arg/aseq, arg/site, opts, and run_align_mutations. The app maps the legacy region window to 1-based target positions.</p>
+            <p class="hint">Imports the Amplicon Analyzer setting template or legacy rows such as arg/aseq, arg/site, opts, and run_align_mutations. Blank template fields are ignored during assay inference.</p>
           </div>
           <div class="field">
             <label for="assayType">Assay type</label>
@@ -900,7 +969,10 @@
           <div class="btns">
             <button class="btn green" id="svgBtn" type="button">Figure SVG</button>
             <button class="btn green" id="pngBtn" type="button">Figure PNG</button>
+            <button class="btn green" id="visiblePngSideBtn" type="button">Visible PNG</button>
             <button class="btn" id="mutationCsvBtn" type="button">Position-level CSV</button>
+            <button class="btn" id="targetCsvBtn" type="button">Target-window CSV</button>
+            <button class="btn" id="conversionCsvBtn" type="button">Substitution matrix</button>
             <button class="btn" id="alleleCsvBtn" type="button">Allele-spectrum CSV</button>
             <button class="btn" id="qcCsvBtn" type="button">QC CSV</button>
             <button class="btn" id="summaryJsonBtn" type="button">Summary JSON</button>
@@ -937,6 +1009,14 @@
             </div>
             <div class="btns">
               <label class="site-picker" id="sitePicker"><span>Displayed site</span><select id="siteSelect" class="site-select" aria-label="Displayed site"></select></label>
+              <div class="figure-toolbar" aria-label="Heatmap view controls">
+                <button class="btn" id="zoomOutBtn" type="button">-</button>
+                <span class="zoom-readout" id="zoomLabel">100%</span>
+                <button class="btn" id="zoomInBtn" type="button">+</button>
+                <button class="btn" id="zoomFitBtn" type="button">Fit</button>
+                <button class="btn" id="zoomResetBtn" type="button">100%</button>
+                <button class="btn green" id="visiblePngBtn" type="button">Visible PNG</button>
+              </div>
               <button class="btn" id="sortBtn" type="button">Sort by max edit</button>
               <button class="btn" id="copySettingsBtn" type="button">Copy settings</button>
             </div>
@@ -984,6 +1064,8 @@
         selectedSiteId: '',
         labels: new Map(),
         sortByMax: false,
+        overviewSort: { key: 'sample', direction: 'asc' },
+        figureView: { scale: 1, fit: false, dragging: false, dragX: 0, dragY: 0, scrollLeft: 0, scrollTop: 0 },
         processing: false,
         cancelRequested: false,
         log: []
@@ -1006,6 +1088,7 @@
         expectedEdit: $('expectedEdit'),
         dropN: $('dropN'),
         settingCsvInput: $('settingCsvInput'),
+        settingTemplateBtn: $('settingTemplateBtn'),
         fileInput: $('fileInput'),
         folderInput: $('folderInput'),
         drop: $('drop'),
@@ -1024,6 +1107,13 @@
         sampleEnd: $('sampleEnd'),
         expectedSampleCount: $('expectedSampleCount'),
         figureWrap: $('figureWrap'),
+        zoomOutBtn: $('zoomOutBtn'),
+        zoomInBtn: $('zoomInBtn'),
+        zoomFitBtn: $('zoomFitBtn'),
+        zoomResetBtn: $('zoomResetBtn'),
+        visiblePngBtn: $('visiblePngBtn'),
+        visiblePngSideBtn: $('visiblePngSideBtn'),
+        zoomLabel: $('zoomLabel'),
         siteSelect: $('siteSelect'),
         tabBody: $('tabBody'),
         figureSubtitle: $('figureSubtitle')
@@ -1389,8 +1479,18 @@
         return cells;
       }
 
+      function parseSettingCsv(text) {
+        const rows = String(text || '').replace(/^\uFEFF/, '').split(/\r?\n/).map(parseCsvLine).filter((row) => row.some(Boolean));
+        if (rows.some((row) => String(row[0] || '').trim() === 'run_align_mutations')) return parseLegacySettingRows(rows);
+        return parseModernSettingRows(rows);
+      }
+
       function parseLegacySettingCsv(text) {
-        const rows = String(text || '').split(/\r?\n/).map(parseCsvLine).filter((row) => row.some(Boolean));
+        const rows = String(text || '').replace(/^\uFEFF/, '').split(/\r?\n/).map(parseCsvLine).filter((row) => row.some(Boolean));
+        return parseLegacySettingRows(rows);
+      }
+
+      function parseLegacySettingRows(rows) {
         const args = new Map();
         const opts = new Map();
         let runRow = null;
@@ -1428,16 +1528,179 @@
         const files = runRow.slice(4).map((value) => value.trim()).filter((value) => /\.(fastq|fq|fastjoin|fastqjoin|fqjoin|join)(\.gz)?$/i.test(value));
         const numbers = files.map(sampleNumberFromName).filter((value) => value != null).sort((a, b) => a - b);
         return {
+          format: 'legacy',
           reference,
           site,
           siteStart,
           siteEnd: siteStart + site.length - 1,
           targets: `${targetStart}-${targetEnd}`,
           targetSource,
+          assayType: 'custom',
+          assayValues: {},
+          siteManifest: '',
           files,
           firstSample: numbers.length ? numbers[0] : null,
+          lastSample: null,
+          expectedSampleCount: null,
           listedSampleCount: numbers.length
         };
+      }
+
+      function parseModernSettingRows(rows) {
+        if (!rows.length) throw new Error('Setting CSV is empty.');
+        const header = rows[0].map(normalizeSettingKey);
+        const headerSet = new Set(header);
+        if (!hasAnyHeader(headerSet, SETTING_ALIASES.reference)) {
+          throw new Error('Setting CSV needs a reference_amplicon_sequence column. Use Download template for the supported format.');
+        }
+        const sites = rows.slice(1)
+          .map((row, idx) => parseModernSettingRow(row, header, idx))
+          .filter((site) => site && site.reference);
+        if (!sites.length) throw new Error('Setting CSV has no usable site rows.');
+        const first = sites[0];
+        return {
+          format: 'modern',
+          reference: first.reference,
+          site: first.siteName,
+          siteStart: null,
+          siteEnd: null,
+          targets: first.targetsText,
+          targetSource: first.targetSource,
+          assayType: first.assayType,
+          assayValues: first.assayValues,
+          expectedEdit: first.expectedEdit,
+          firstSample: first.sampleStart,
+          lastSample: first.sampleEnd,
+          expectedSampleCount: first.expectedSampleCount,
+          preferredInput: first.preferredInput,
+          listedSampleCount: 0,
+          siteManifest: sites.slice(1).map((site) => [site.siteName, site.reference, site.targetsText].map(csvEncode).join(',')).join('\n'),
+          warnings: sites.flatMap((site) => site.warning ? [`${site.siteName}: ${site.warning}`] : [])
+        };
+      }
+
+      const SETTING_ALIASES = {
+        siteName: ['site_name', 'site', 'site_id', 'name', 'amplicon_name'],
+        reference: ['reference_amplicon_sequence', 'reference_amplicon', 'reference', 'ref_seq', 'refseq', 'amplicon_sequence', 'amplicon', 'aseq'],
+        targetPositions: ['target_positions', 'targeting_window', 'target_window', 'targets', 'manual_targets', 'editing_window', 'user_region'],
+        assayType: ['assay_type', 'assay', 'system', 'nuclease_type'],
+        spacer: ['spacer_sequence', 'spacer', 'guide_sequence', 'guide', 'grna', 'sgrna', 'protospacer'],
+        pam: ['pam_sequence', 'pam', 'pam_pattern'],
+        spacerWindow: ['spacer_window', 'guide_window', 'cas_window', 'editing_window_in_spacer'],
+        taleLeft: ['tale_left_sequence', 'left_tale_sequence', 'left_binding_site', 'tale_left', 'left_binding'],
+        taleRight: ['tale_right_sequence', 'right_tale_sequence', 'right_binding_site', 'tale_right', 'right_binding'],
+        taleSpacer: ['tale_spacer_sequence', 'tale_spacer', 'talen_spacer', 'known_spacer_sequence'],
+        talePadding: ['tale_padding', 'window_padding', 'padding'],
+        expectedEdit: ['expected_edit', 'base_edit', 'conversion'],
+        sampleStart: ['sample_start', 'first_sample_number', 'first_sample', 'start_sample'],
+        sampleEnd: ['sample_end', 'last_sample_number', 'last_sample', 'end_sample'],
+        expectedSampleCount: ['expected_sample_count', 'sample_count', 'plate_size'],
+        preferredInput: ['preferred_input', 'input_type']
+      };
+
+      function parseModernSettingRow(row, header, index) {
+        const get = (key) => getSettingCell(row, header, SETTING_ALIASES[key]);
+        const reference = normalizeSeq(get('reference'));
+        if (!reference) return null;
+        if (reference.length < 20) throw new Error(`Setting CSV row ${index + 2} reference is shorter than 20 bp.`);
+        const rawSpacer = normalizeSeq(get('spacer'));
+        const values = {
+          type: normalizeAssayType(get('assayType')),
+          spacer: rawSpacer,
+          pam: normalizePattern(get('pam')),
+          spacerWindow: get('spacerWindow').trim(),
+          left: normalizeSeq(get('taleLeft')),
+          right: normalizeSeq(get('taleRight')),
+          taleSpacer: normalizeSeq(get('taleSpacer')),
+          padding: get('talePadding').trim()
+        };
+        values.type = inferAssayType(values);
+        if (values.type === 'cas') {
+          values.spacer = rawSpacer || values.spacer;
+          values.taleSpacer = '';
+        } else if (values.type === 'tale') {
+          values.taleSpacer = values.taleSpacer || rawSpacer;
+          values.spacer = '';
+        }
+        const manualTargets = get('targetPositions').trim();
+        const derived = deriveAssayFromValues(reference, values, manualTargets);
+        const targetsText = formatTargetSet(derived.targets) || manualTargets;
+        return {
+          siteName: get('siteName').trim() || `Site ${index + 1}`,
+          reference,
+          targetsText,
+          targetSource: derived.source,
+          warning: derived.warning,
+          assayType: values.type,
+          assayValues: values,
+          expectedEdit: get('expectedEdit').trim().toUpperCase(),
+          sampleStart: parseOptionalWholeNumber(get('sampleStart')),
+          sampleEnd: parseOptionalWholeNumber(get('sampleEnd')),
+          expectedSampleCount: parseOptionalWholeNumber(get('expectedSampleCount')),
+          preferredInput: get('preferredInput').trim().toLowerCase()
+        };
+      }
+
+      function normalizeSettingKey(value) {
+        return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      }
+
+      function hasAnyHeader(headerSet, aliases) {
+        return aliases.some((alias) => headerSet.has(normalizeSettingKey(alias)));
+      }
+
+      function getSettingCell(row, header, aliases) {
+        for (const alias of aliases) {
+          const idx = header.indexOf(normalizeSettingKey(alias));
+          if (idx !== -1) return String(row[idx] || '').trim();
+        }
+        return '';
+      }
+
+      function normalizeAssayType(value) {
+        const key = String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (!key) return '';
+        if (['cas', 'crispr', 'crisprcas', 'cas9', 'cas12', 'baseeditor', 'primeeditor'].includes(key)) return 'cas';
+        if (['tale', 'talen', 'taleen'].includes(key)) return 'tale';
+        if (['custom', 'manual', 'window'].includes(key)) return 'custom';
+        return '';
+      }
+
+      function inferAssayType(values) {
+        if (values.type) return values.type;
+        if (values.pam) return 'cas';
+        if (values.left || values.right || values.taleSpacer || values.spacer) return 'tale';
+        return 'custom';
+      }
+
+      function parseOptionalWholeNumber(value) {
+        const text = String(value || '').trim();
+        if (!text) return null;
+        const number = Number(text);
+        return Number.isFinite(number) && Number.isInteger(number) && number >= 0 ? number : null;
+      }
+
+      function formatTargetSet(targets) {
+        const arr = Array.from(targets || []).sort((a, b) => a - b);
+        if (!arr.length) return '';
+        const ranges = [];
+        let start = arr[0];
+        let prev = arr[0];
+        for (let i = 1; i <= arr.length; i += 1) {
+          const value = arr[i];
+          if (value === prev + 1) {
+            prev = value;
+            continue;
+          }
+          ranges.push(start === prev ? String(start) : `${start}-${prev}`);
+          start = value;
+          prev = value;
+        }
+        return ranges.join(',');
+      }
+
+      function csvEncode(value) {
+        return `"${String(value == null ? '' : value).replace(/"/g, '""')}"`;
       }
 
       async function importSettingCsv() {
@@ -1447,18 +1710,23 @@
           return;
         }
         try {
-          const parsed = parseLegacySettingCsv(await file.text());
-          const expectedCount = expectedSampleCount() || 96;
+          const parsed = parseSettingCsv(await file.text());
           els.runName.value = file.name.replace(/\.csv$/i, '').replace(/[_-]+setting$/i, '') || 'Amplicon analysis run';
           els.referenceSeq.value = parsed.reference;
-          els.assayType.value = 'custom';
+          els.assayType.value = parsed.assayType || 'custom';
           renderAssayFields();
+          applyImportedAssayValues(parsed.assayType, parsed.assayValues || {});
           els.targets.value = parsed.targets;
+          els.siteManifest.value = parsed.siteManifest || '';
+          if (parsed.expectedEdit && parseExpectedEdit(parsed.expectedEdit)) els.expectedEdit.value = parsed.expectedEdit;
+          if (parsed.expectedSampleCount) els.expectedSampleCount.value = String(parsed.expectedSampleCount);
+          const expectedCount = expectedSampleCount() || 96;
           if (parsed.firstSample != null) {
             els.sampleStart.value = String(parsed.firstSample);
-            els.sampleEnd.value = String(parsed.firstSample + expectedCount - 1);
+            els.sampleEnd.value = String(parsed.lastSample != null ? parsed.lastSample : parsed.firstSample + expectedCount - 1);
           }
-          addLog(`Imported setting CSV: ${parsed.reference.length} bp reference, target positions ${parsed.targets}, site ${parsed.siteStart}-${parsed.siteEnd}.`, 'ok');
+          addLog(`Imported ${parsed.format || 'setting'} CSV: ${parsed.reference.length} bp reference, target positions ${parsed.targets || 'none'}, assay ${parsed.assayType || 'custom'}.`, 'ok');
+          (parsed.warnings || []).forEach((warning) => addLog(warning, 'warn'));
           if (parsed.listedSampleCount && parsed.listedSampleCount !== expectedCount) {
             addLog(`Setting CSV lists ${parsed.listedSampleCount} file(s); using expected ${expectedCount}-sample range from ${parsed.firstSample} to ${parsed.firstSample + expectedCount - 1}.`, 'warn');
           }
@@ -1468,6 +1736,19 @@
           setStep('setup', []);
         } catch (error) {
           addLog(error.message || String(error), 'bad');
+        }
+      }
+
+      function applyImportedAssayValues(assayType, values) {
+        if (assayType === 'cas') {
+          if ($('casSpacer')) $('casSpacer').value = values.spacer || '';
+          if ($('casPam')) $('casPam').value = values.pam || '';
+          if ($('casWindow')) $('casWindow').value = values.spacerWindow || '4-8';
+        } else if (assayType === 'tale') {
+          if ($('taleLeft')) $('taleLeft').value = values.left || '';
+          if ($('taleRight')) $('taleRight').value = values.right || '';
+          if ($('taleSpacer')) $('taleSpacer').value = values.taleSpacer || '';
+          if ($('talePadding')) $('talePadding').value = values.padding || '0';
         }
       }
 
@@ -1527,20 +1808,40 @@
         return { from: match[1], to: match[2], label: `${match[1]}>${match[2]}` };
       }
 
+      function collectAssayValuesFromUi() {
+        const type = els.assayType.value;
+        return {
+          type,
+          spacer: type === 'cas' ? normalizeSeq($('casSpacer')?.value || '') : '',
+          pam: type === 'cas' ? normalizePattern($('casPam')?.value || '') : '',
+          spacerWindow: type === 'cas' ? ($('casWindow')?.value || '4-8') : '',
+          left: type === 'tale' ? normalizeSeq($('taleLeft')?.value || '') : '',
+          right: type === 'tale' ? normalizeSeq($('taleRight')?.value || '') : '',
+          taleSpacer: type === 'tale' ? normalizeSeq($('taleSpacer')?.value || '') : '',
+          padding: type === 'tale' ? ($('talePadding')?.value || '0') : '0'
+        };
+      }
+
       function deriveAssayTargets(reference) {
-        const manual = parseTargets(els.targets.value);
+        return deriveAssayFromValues(reference, collectAssayValuesFromUi(), els.targets.value);
+      }
+
+      function deriveAssayFromValues(reference, values, manualTargetText) {
+        const assayValues = values || {};
+        const manual = parseTargets(manualTargetText);
         const fallback = (warning) => ({
           targets: manual,
           source: manual.size ? 'manual / fallback target positions' : 'no target positions',
           warning,
           details: {}
         });
-        const assayType = els.assayType.value;
+        const assayType = normalizeAssayType(assayValues.type) || 'custom';
 
         if (assayType === 'cas') {
-          const spacer = normalizeSeq($('casSpacer')?.value || '');
-          const pamPattern = normalizePattern($('casPam')?.value || 'NGG');
-          const spacerWindow = parseTargets($('casWindow')?.value || '4-8');
+          const spacer = normalizeSeq(assayValues.spacer || '');
+          const pamPattern = normalizePattern(assayValues.pam || '');
+          const windowText = assayValues.spacerWindow || '4-8';
+          const spacerWindow = parseTargets(windowText);
           if (!spacer) return fallback('Cas mode: no spacer/guide sequence was provided, so manual target positions are used.');
           const match = findSpacerInReference(reference, spacer, pamPattern);
           if (!match) return fallback('Cas mode: spacer was not found in the reference, so manual target positions are used.');
@@ -1555,17 +1856,17 @@
           });
           return {
             targets,
-            source: `Cas ${match.orientation} spacer match - PAM ${match.pamMatched ? 'matched' : 'not confirmed'} - spacer window ${$('casWindow')?.value || '4-8'}`,
+            source: `Cas ${match.orientation} spacer match - PAM ${pamPattern ? (match.pamMatched ? 'matched' : 'not confirmed') : 'not specified'} - spacer window ${windowText}`,
             warning: match.pamMatched ? '' : 'Cas mode: spacer was found, but the PAM pattern was not confirmed.',
-            details: { spacer, pamPattern, spacerWindow: $('casWindow')?.value || '4-8', orientation: match.orientation }
+            details: { spacer, pamPattern, spacerWindow: windowText, orientation: match.orientation }
           };
         }
 
         if (assayType === 'tale') {
-          const left = normalizeSeq($('taleLeft')?.value || '');
-          const right = normalizeSeq($('taleRight')?.value || '');
-          const spacer = normalizeSeq($('taleSpacer')?.value || '');
-          const padding = Math.max(0, Number($('talePadding')?.value) || 0);
+          const left = normalizeSeq(assayValues.left || '');
+          const right = normalizeSeq(assayValues.right || '');
+          const spacer = normalizeSeq(assayValues.taleSpacer || '');
+          const padding = Math.max(0, Number(assayValues.padding) || 0);
           if (left && right) {
             const match = findTalePair(reference, left, right);
             if (match) {
@@ -1906,6 +2207,8 @@
         state.selectedSample = '';
         state.selectedSiteId = siteConfigs[0] ? siteConfigs[0].siteId : '';
         state.sortByMax = false;
+        state.overviewSort = { key: 'sample', direction: 'asc' };
+        state.figureView = { scale: 1, fit: false, dragging: false, dragX: 0, dragY: 0, scrollLeft: 0, scrollTop: 0 };
         $('runBtn').disabled = true;
         $('cancelBtn').disabled = false;
         setRunBadge('running', 'info');
@@ -2530,6 +2833,7 @@
         syncSiteSelect();
         const svg = buildSvgFigure();
         if (!svg) {
+          els.figureWrap.classList.remove('has-figure');
           els.figureWrap.innerHTML = `
             <div class="empty">
               <strong>Load FASTQ files to generate the figure</strong>
@@ -2539,12 +2843,16 @@
           els.figureSubtitle.textContent = 'Upload FASTQ files or load the demo dataset to generate a figure.';
           els.exportBadge.textContent = 'waiting';
           els.exportBadge.className = 'badge';
+          updateFigureToolbar(false);
           return;
         }
-        els.figureWrap.innerHTML = svg;
+        els.figureWrap.classList.add('has-figure');
+        els.figureWrap.innerHTML = `<div class="figure-stage"><div class="figure-canvas" id="figureCanvas">${svg}</div></div>`;
+        applyFigureView();
         const site = currentSite();
         const modeText = getSignalLabel(site.settings.signalMode);
         els.figureSubtitle.textContent = `${site.siteName} - ${modeText} - ${site.samples.length} samples - ${site.reference.length} bp reference - ${site.settings.targetSource}`;
+        updateFigureToolbar(true);
       }
 
       function buildSvgFigure() {
@@ -2615,6 +2923,74 @@
         svg += buildLegend(left, height - 42);
         svg += '</svg>';
         return svg;
+      }
+
+      function currentFigureSize() {
+        const svg = els.figureWrap.querySelector('.figure-canvas svg');
+        if (!svg) return { width: 0, height: 0 };
+        return {
+          width: Number(svg.getAttribute('width')) || 0,
+          height: Number(svg.getAttribute('height')) || 0
+        };
+      }
+
+      function clampFigureScale(value) {
+        return Math.max(0.15, Math.min(6, Number(value) || 1));
+      }
+
+      function applyFigureView(options = {}) {
+        const canvas = els.figureWrap.querySelector('.figure-canvas');
+        const size = currentFigureSize();
+        if (!canvas || !size.width || !size.height) return;
+        if (state.figureView.fit) {
+          const available = Math.max(260, els.figureWrap.clientWidth - 28);
+          state.figureView.scale = clampFigureScale(available / size.width);
+        } else {
+          state.figureView.scale = clampFigureScale(state.figureView.scale);
+        }
+        canvas.style.width = `${Math.max(1, Math.round(size.width * state.figureView.scale))}px`;
+        canvas.style.minHeight = `${Math.max(1, Math.round(size.height * state.figureView.scale))}px`;
+        if (options.resetScroll) {
+          els.figureWrap.scrollLeft = 0;
+          els.figureWrap.scrollTop = 0;
+        }
+        updateFigureToolbar(true);
+      }
+
+      function updateFigureToolbar(hasFigure = !!state.results) {
+        const disabled = !hasFigure;
+        [els.zoomOutBtn, els.zoomInBtn, els.zoomFitBtn, els.zoomResetBtn, els.visiblePngBtn, els.visiblePngSideBtn].forEach((button) => {
+          if (button) button.disabled = disabled;
+        });
+        if (els.zoomLabel) els.zoomLabel.textContent = disabled ? '--' : `${Math.round(state.figureView.scale * 100)}%`;
+      }
+
+      function setFigureScale(nextScale, anchorEvent) {
+        if (!state.results) return;
+        const oldScale = state.figureView.scale || 1;
+        const rect = els.figureWrap.getBoundingClientRect();
+        const anchorX = anchorEvent ? anchorEvent.clientX - rect.left : els.figureWrap.clientWidth / 2;
+        const anchorY = anchorEvent ? anchorEvent.clientY - rect.top : els.figureWrap.clientHeight / 2;
+        const beforeX = els.figureWrap.scrollLeft + anchorX;
+        const beforeY = els.figureWrap.scrollTop + anchorY;
+        state.figureView.fit = false;
+        state.figureView.scale = clampFigureScale(nextScale);
+        applyFigureView();
+        const ratio = state.figureView.scale / oldScale;
+        els.figureWrap.scrollLeft = beforeX * ratio - anchorX;
+        els.figureWrap.scrollTop = beforeY * ratio - anchorY;
+      }
+
+      function fitFigureView() {
+        if (!state.results) return;
+        state.figureView.fit = true;
+        applyFigureView({ resetScroll: true });
+      }
+
+      function resetFigureView() {
+        state.figureView.fit = false;
+        state.figureView.scale = 1;
+        applyFigureView({ resetScroll: true });
       }
 
       function splitPanels(samples) {
@@ -2701,7 +3077,8 @@
             </tr>
           `;
         }).join('') : '';
-        const rows = site.samples.map((sample) => {
+        const sortedSamples = getOverviewSortedSamples(site);
+        const rows = sortedSamples.map((sample) => {
           const warnBadge = sample.warnings.length ? `<span class="badge warn">${escapeHtml(sample.warnings.join(', '))}</span>` : '<span class="badge good">OK</span>';
           return `
             <tr>
@@ -2740,11 +3117,47 @@
           </div>` : ''}
           <div class="table-scroll">
             <table>
-              <thead><tr><th>sample</th><th>QC-passed reads</th><th>alignment-passed reads</th><th>unique reads</th><th>mean Q</th><th>mean identity</th><th>max edit</th><th>status</th></tr></thead>
+              <thead><tr>${overviewTh('sample', 'sample')}${overviewTh('passedReads', 'QC-passed reads')}${overviewTh('alignedReads', 'alignment-passed reads')}${overviewTh('uniqueReads', 'unique reads')}${overviewTh('meanQuality', 'mean Q')}${overviewTh('meanIdentity', 'mean identity')}${overviewTh('maxPercent', 'max edit')}${overviewTh('warnings', 'status')}</tr></thead>
               <tbody>${rows}</tbody>
             </table>
           </div>
         `;
+      }
+
+      function overviewTh(key, label) {
+        const active = state.overviewSort && state.overviewSort.key === key;
+        const icon = active ? (state.overviewSort.direction === 'asc' ? 'up' : 'down') : '';
+        return `<th><button class="sort-head" data-overview-sort="${escapeHtml(key)}" type="button">${escapeHtml(label)}<span>${escapeHtml(icon)}</span></button></th>`;
+      }
+
+      function setOverviewSort(key) {
+        const current = state.overviewSort || {};
+        const direction = current.key === key && current.direction === 'asc' ? 'desc' : 'asc';
+        state.overviewSort = { key, direction };
+        if (state.activeTab === 'overview') renderOverviewTab();
+      }
+
+      function getOverviewSortedSamples(site) {
+        const sort = state.overviewSort || { key: 'sample', direction: 'asc' };
+        const direction = sort.direction === 'desc' ? -1 : 1;
+        return site.samples.slice().sort((a, b) => {
+          const av = overviewSortValue(a, sort.key);
+          const bv = overviewSortValue(b, sort.key);
+          if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * direction;
+          return String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: 'base' }) * direction;
+        });
+      }
+
+      function overviewSortValue(sample, key) {
+        if (key === 'sample') return labelFor(sample.sample);
+        if (key === 'passedReads') return sample.qc.passedReads;
+        if (key === 'alignedReads') return sample.qc.alignedReads;
+        if (key === 'uniqueReads') return sample.qc.uniqueReads;
+        if (key === 'meanQuality') return sample.qc.meanQuality;
+        if (key === 'meanIdentity') return sample.qc.meanIdentity;
+        if (key === 'maxPercent') return sample.maxPercent;
+        if (key === 'warnings') return sample.warnings.length;
+        return labelFor(sample.sample);
       }
 
       function maxDepth(samples) {
@@ -2884,15 +3297,32 @@
 
       function renderExportTab() {
         els.tabBody.innerHTML = `
-          <div class="export-grid">
-            <button class="btn green" data-export="svg" type="button">Figure SVG</button>
-            <button class="btn green" data-export="png" type="button">Figure PNG</button>
-            <button class="btn" data-export="mutation" type="button">Position-level CSV</button>
-            <button class="btn" data-export="allele" type="button">Allele-spectrum CSV</button>
-            <button class="btn" data-export="qc" type="button">QC CSV</button>
-            <button class="btn" data-export="summary-json" type="button">Summary JSON</button>
-            <button class="btn" data-export="report" type="button">Methods + QC report</button>
-            <button class="btn" data-export="html-report" type="button">HTML report</button>
+          <div class="export-section">
+            <h3>Figure exports</h3>
+            <div class="export-grid">
+              <button class="btn green" data-export="svg" type="button">Full heatmap SVG</button>
+              <button class="btn green" data-export="png" type="button">Full heatmap PNG</button>
+              <button class="btn green" data-export="visible-png" type="button">Visible viewport PNG</button>
+            </div>
+          </div>
+          <div class="export-section">
+            <h3>Processed data</h3>
+            <div class="export-grid">
+              <button class="btn" data-export="mutation" type="button">Position-level CSV</button>
+              <button class="btn" data-export="target" type="button">Target-window CSV</button>
+              <button class="btn" data-export="conversion" type="button">Substitution matrix</button>
+              <button class="btn" data-export="allele" type="button">Allele-spectrum CSV</button>
+              <button class="btn" data-export="qc" type="button">QC CSV</button>
+              <button class="btn" data-export="summary-json" type="button">Summary JSON</button>
+            </div>
+          </div>
+          <div class="export-section">
+            <h3>Reports and setup</h3>
+            <div class="export-grid">
+              <button class="btn" data-export="report" type="button">Methods + QC report</button>
+              <button class="btn" data-export="html-report" type="button">HTML report</button>
+              <button class="btn" data-export="setting-template" type="button">Setting CSV template</button>
+            </div>
           </div>
           <p class="hint">Figure exports use the displayed site. Table, summary, and report exports include all analyzed sites.</p>
         `;
@@ -2970,6 +3400,60 @@
         return toCsv(header, rows);
       }
 
+      function buildTargetCsv() {
+        const header = ['site', 'sample', 'label', 'position', 'ref_base', 'substitution_reads', 'deletion_reads', 'insertion_reads', 'signal_reads', 'denominator', 'percent', 'expected_edit_reads', 'expected_edit_percent', 'A', 'C', 'G', 'T', 'N'];
+        const targetKeys = new Set();
+        state.results.sites.forEach((site) => {
+          site.settings.targets.forEach((position) => targetKeys.add(`${site.siteId}:${position}`));
+        });
+        const rows = state.results.mutationRows
+          .filter((row) => targetKeys.has(`${row.siteId}:${row.position}`))
+          .map((row) => [
+            row.site,
+            row.sample,
+            labelFor(row.sample),
+            row.position,
+            row.refBase,
+            row.substitutionReads,
+            row.deletionReads,
+            row.insertionReads,
+            row.displayReads,
+            row.denominator,
+            row.percent,
+            row.expectedEditReads,
+            row.expectedEditPercent,
+            row.A,
+            row.C,
+            row.G,
+            row.T,
+            row.N
+          ]);
+        return toCsv(header, rows);
+      }
+
+      function buildConversionCsv() {
+        const header = ['site', 'sample', 'label', 'position', 'from_base', 'to_base', 'substitution_reads', 'covered_reads', 'percent'];
+        const rows = [];
+        state.results.mutationRows.forEach((row) => {
+          BASES.filter((base) => base !== row.refBase).forEach((base) => {
+            const reads = Number(row[base]) || 0;
+            if (!reads) return;
+            rows.push([
+              row.site,
+              row.sample,
+              labelFor(row.sample),
+              row.position,
+              row.refBase,
+              base,
+              reads,
+              row.denominator,
+              row.denominator ? reads / row.denominator * 100 : 0
+            ]);
+          });
+        });
+        return toCsv(header, rows);
+      }
+
       function describeSampleRange(run = state.results) {
         const range = run && run.sampleRange ? run.sampleRange : getSampleNumberRange();
         return range && range.active ? range.label : 'all samples';
@@ -3001,6 +3485,8 @@
           },
           outputs: {
             processedMutationTable: 'processed_mutation_table.csv',
+            targetWindowTable: 'target_window_table.csv',
+            substitutionMatrix: 'substitution_matrix.csv',
             alleleSpectrumTable: 'allele_spectrum_table.csv',
             qcReadCounts: 'qc_read_counts.csv',
             figureSvg: 'amplicon_mutation_heatmap.svg',
@@ -3295,11 +3781,76 @@
         image.src = url;
       }
 
+      function exportVisiblePng() {
+        if (!requireResults()) return;
+        const svgElement = els.figureWrap.querySelector('.figure-canvas svg');
+        if (!svgElement) {
+          exportPng();
+          return;
+        }
+        const svg = buildSvgFigure();
+        const naturalWidth = Number(svgElement.getAttribute('width')) || 1200;
+        const naturalHeight = Number(svgElement.getAttribute('height')) || 800;
+        const wrapRect = els.figureWrap.getBoundingClientRect();
+        const svgRect = svgElement.getBoundingClientRect();
+        const left = Math.max(wrapRect.left, svgRect.left);
+        const top = Math.max(wrapRect.top, svgRect.top);
+        const right = Math.min(wrapRect.right, svgRect.right);
+        const bottom = Math.min(wrapRect.bottom, svgRect.bottom);
+        const visibleWidthCss = Math.max(0, right - left);
+        const visibleHeightCss = Math.max(0, bottom - top);
+        if (!visibleWidthCss || !visibleHeightCss || !svgRect.width || !svgRect.height) {
+          addLog('No visible heatmap area is available to save.', 'warn');
+          return;
+        }
+        const sx = (left - svgRect.left) / svgRect.width * naturalWidth;
+        const sy = (top - svgRect.top) / svgRect.height * naturalHeight;
+        const sw = visibleWidthCss / svgRect.width * naturalWidth;
+        const sh = visibleHeightCss / svgRect.height * naturalHeight;
+        const image = new Image();
+        const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        image.onload = () => {
+          const outputScale = 2;
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(sw * outputScale));
+          canvas.height = Math.max(1, Math.round(sh * outputScale));
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(image, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+          canvas.toBlob((png) => {
+            const pngUrl = URL.createObjectURL(png);
+            const anchor = document.createElement('a');
+            anchor.href = pngUrl;
+            anchor.download = 'amplicon_mutation_heatmap_visible.png';
+            anchor.click();
+            setTimeout(() => {
+              URL.revokeObjectURL(pngUrl);
+              URL.revokeObjectURL(url);
+            }, 800);
+          }, 'image/png');
+          setStep('export', ['setup', 'upload', 'process', 'results']);
+        };
+        image.onerror = () => {
+          URL.revokeObjectURL(url);
+          addLog('Visible PNG conversion failed. Export the full SVG if you need a vector figure.', 'bad');
+        };
+        image.src = url;
+      }
+
       function exportByKind(kind) {
+        if (kind === 'setting-template') {
+          downloadSettingTemplate();
+          return;
+        }
         if (!requireResults()) return;
         if (kind === 'svg') exportSvg();
         else if (kind === 'png') exportPng();
+        else if (kind === 'visible-png') exportVisiblePng();
         else if (kind === 'mutation') download('processed_mutation_table.csv', buildMutationCsv(), 'text/csv;charset=utf-8');
+        else if (kind === 'target') download('target_window_table.csv', buildTargetCsv(), 'text/csv;charset=utf-8');
+        else if (kind === 'conversion') download('substitution_matrix.csv', buildConversionCsv(), 'text/csv;charset=utf-8');
         else if (kind === 'allele') download('allele_spectrum_table.csv', buildAlleleCsv(), 'text/csv;charset=utf-8');
         else if (kind === 'qc') download('qc_read_counts.csv', buildQcCsv(), 'text/csv;charset=utf-8');
         else if (kind === 'summary-json') download('amplicon_run_summary.json', buildSummaryJson(), 'application/json;charset=utf-8');
@@ -3352,6 +3903,8 @@
         state.selectedSample = '';
         state.selectedSiteId = '';
         state.sortByMax = false;
+        state.overviewSort = { key: 'sample', direction: 'asc' };
+        state.figureView = { scale: 1, fit: false, dragging: false, dragX: 0, dragY: 0, scrollLeft: 0, scrollTop: 0 };
         state.log = [];
         els.referenceSeq.value = DEMO_REF;
         els.targets.value = '16,19';
@@ -3387,6 +3940,8 @@
         state.selectedSample = '';
         state.selectedSiteId = '';
         state.sortByMax = false;
+        state.overviewSort = { key: 'sample', direction: 'asc' };
+        state.figureView = { scale: 1, fit: false, dragging: false, dragX: 0, dragY: 0, scrollLeft: 0, scrollTop: 0 };
         els.referenceSeq.value = DEMO_REF;
         els.targets.value = '16,19,35';
         els.siteManifest.value = '';
@@ -3423,6 +3978,8 @@
           state.selectedSample = '';
           state.selectedSiteId = '';
           state.sortByMax = false;
+          state.overviewSort = { key: 'sample', direction: 'asc' };
+          state.figureView = { scale: 1, fit: false, dragging: false, dragX: 0, dragY: 0, scrollLeft: 0, scrollTop: 0 };
           els.runName.value = PUBLIC_BENCHMARK.name;
           els.referenceSeq.value = PUBLIC_BENCHMARK.reference;
           els.targets.value = '135-144';
@@ -3488,10 +4045,98 @@
         navigator.clipboard?.writeText(text).then(() => addLog('Current settings copied to clipboard.', 'ok')).catch(() => addLog('Clipboard copy failed.', 'warn'));
       }
 
+      function buildSettingTemplateCsv() {
+        const header = [
+          'site_name',
+          'reference_amplicon_sequence',
+          'target_positions',
+          'assay_type',
+          'spacer_sequence',
+          'pam_sequence',
+          'spacer_window',
+          'tale_left_sequence',
+          'tale_right_sequence',
+          'tale_spacer_sequence',
+          'tale_padding',
+          'expected_edit',
+          'sample_start',
+          'sample_end',
+          'expected_sample_count',
+          'preferred_input',
+          'notes'
+        ];
+        const rows = [
+          [
+            'cas_base_editor',
+            PUBLIC_BENCHMARK.reference,
+            '',
+            '',
+            PUBLIC_BENCHMARK.spacer,
+            PUBLIC_BENCHMARK.pam,
+            PUBLIC_BENCHMARK.spacerWindow,
+            '',
+            '',
+            '',
+            '',
+            PUBLIC_BENCHMARK.expectedEdit,
+            97,
+            192,
+            96,
+            'joined',
+            'PAM plus spacer infers Cas / CRISPR. Blank target_positions lets the spacer_window define the target window.'
+          ],
+          [
+            'tale_pair_site',
+            DEMO_REF,
+            '',
+            '',
+            '',
+            '',
+            '',
+            'TGGTAGTTGG',
+            'TGACGATCTG',
+            '',
+            0,
+            '',
+            97,
+            192,
+            96,
+            'joined',
+            'TALE left/right binding sites infer the spacer between them as the target window.'
+          ],
+          [
+            'custom_window_site',
+            DEMO_REF,
+            '16,19,35',
+            'custom',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            96,
+            'raw',
+            'Custom mode uses target_positions directly. Blank assay fields are ignored.'
+          ]
+        ];
+        return toCsv(header, rows) + '\n';
+      }
+
+      function downloadSettingTemplate() {
+        download('amplicon_analyzer_setting_template.csv', buildSettingTemplateCsv(), 'text/csv;charset=utf-8');
+        addLog('Setting CSV template downloaded.', 'ok');
+      }
+
       function bindEvents() {
         $('pickBtn').onclick = () => els.fileInput.click();
         $('folderBtn').onclick = () => els.folderInput.click();
         $('settingCsvBtn').onclick = () => els.settingCsvInput.click();
+        els.settingTemplateBtn.onclick = downloadSettingTemplate;
         els.settingCsvInput.onchange = importSettingCsv;
         els.fileInput.onchange = (event) => {
           addFiles(event.target.files);
@@ -3513,10 +4158,18 @@
           state.sortByMax = !state.sortByMax;
           renderFigure();
         };
+        els.zoomOutBtn.onclick = () => setFigureScale(state.figureView.scale / 1.25);
+        els.zoomInBtn.onclick = () => setFigureScale(state.figureView.scale * 1.25);
+        els.zoomFitBtn.onclick = fitFigureView;
+        els.zoomResetBtn.onclick = resetFigureView;
         $('copySettingsBtn').onclick = copySettings;
         $('svgBtn').onclick = exportSvg;
         $('pngBtn').onclick = exportPng;
+        els.visiblePngBtn.onclick = exportVisiblePng;
+        els.visiblePngSideBtn.onclick = exportVisiblePng;
         $('mutationCsvBtn').onclick = () => exportByKind('mutation');
+        $('targetCsvBtn').onclick = () => exportByKind('target');
+        $('conversionCsvBtn').onclick = () => exportByKind('conversion');
         $('alleleCsvBtn').onclick = () => exportByKind('allele');
         $('qcCsvBtn').onclick = () => exportByKind('qc');
         $('summaryJsonBtn').onclick = () => exportByKind('summary-json');
@@ -3649,9 +4302,44 @@
           }
         });
         els.tabBody.addEventListener('click', (event) => {
+          const sortButton = event.target.closest('[data-overview-sort]');
+          if (sortButton) {
+            setOverviewSort(sortButton.dataset.overviewSort);
+            return;
+          }
           const button = event.target.closest('[data-export]');
           if (button) exportByKind(button.dataset.export);
         });
+
+        els.figureWrap.addEventListener('wheel', (event) => {
+          if (!state.results || !event.ctrlKey) return;
+          event.preventDefault();
+          setFigureScale(state.figureView.scale * (event.deltaY < 0 ? 1.12 : 0.89), event);
+        }, { passive: false });
+        els.figureWrap.addEventListener('pointerdown', (event) => {
+          if (!state.results || event.button !== 0 || !event.target.closest('.figure-canvas')) return;
+          state.figureView.dragging = true;
+          state.figureView.dragX = event.clientX;
+          state.figureView.dragY = event.clientY;
+          state.figureView.scrollLeft = els.figureWrap.scrollLeft;
+          state.figureView.scrollTop = els.figureWrap.scrollTop;
+          els.figureWrap.classList.add('dragging');
+          els.figureWrap.setPointerCapture?.(event.pointerId);
+          event.preventDefault();
+        });
+        els.figureWrap.addEventListener('pointermove', (event) => {
+          if (!state.figureView.dragging) return;
+          els.figureWrap.scrollLeft = state.figureView.scrollLeft - (event.clientX - state.figureView.dragX);
+          els.figureWrap.scrollTop = state.figureView.scrollTop - (event.clientY - state.figureView.dragY);
+        });
+        const endPan = (event) => {
+          if (!state.figureView.dragging) return;
+          state.figureView.dragging = false;
+          els.figureWrap.classList.remove('dragging');
+          if (event?.pointerId != null) els.figureWrap.releasePointerCapture?.(event.pointerId);
+        };
+        els.figureWrap.addEventListener('pointerup', endPan);
+        els.figureWrap.addEventListener('pointercancel', endPan);
       }
 
       function init() {

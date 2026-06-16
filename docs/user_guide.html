@@ -112,7 +112,7 @@
         <li>Paste the full expected PCR amplicon sequence into <strong>Reference amplicon sequence</strong>.</li>
         <li>Select an <strong>Assay type</strong>: Custom window, Cas / CRISPR, or TALE / TALEN.</li>
         <li>Optional: add extra site rows in <strong>Additional sites</strong>.</li>
-        <li>Optional: import a legacy setting CSV to fill the reference and target window automatically.</li>
+        <li>Optional: download the setting CSV template, fill it, then import it to configure the reference, assay, target window, and sample range automatically.</li>
         <li>Add FASTQ, FASTQ.GZ, joined FASTQ text files, or choose a folder.</li>
         <li>Optional: set a first/last sample number to process only numbered sample groups. Keep <strong>Expected sample count</strong> at 96 for 96-well batches.</li>
         <li>Optional: choose an <strong>Expected base edit</strong> such as C&gt;T or A&gt;G.</li>
@@ -131,7 +131,7 @@
           <tr><td><code>.fastq</code>, <code>.fq</code></td><td>Plain FASTQ files.</td></tr>
           <tr><td><code>.fastq.gz</code>, <code>.fq.gz</code></td><td>Gzip-compressed FASTQ files in browsers that support <code>DecompressionStream</code>.</td></tr>
           <tr><td><code>.fastjoin</code>, <code>.fastqjoin</code>, <code>.fqjoin</code>, <code>.join</code>, <code>.txt</code></td><td>Joined or concatenated FASTQ text files.</td></tr>
-          <tr><td>Legacy setting CSV</td><td>Optional CSV with <code>arg</code>, <code>opts</code>, and <code>run_align_mutations</code> rows.</td></tr>
+          <tr><td>Setting CSV</td><td>Optional Amplicon Analyzer template CSV, or legacy CSV with <code>arg</code>, <code>opts</code>, and <code>run_align_mutations</code> rows.</td></tr>
           <tr><td>Reference amplicon</td><td>The full expected PCR amplicon sequence, using A/C/G/T/N bases.</td></tr>
         </tbody>
       </table>
@@ -139,6 +139,9 @@
       <p>Illumina-style names such as <code>97_S97_L001_R1_001.fastq.gz</code> are normalized to sample <code>97</code>, matching joined files such as <code>97.fastqjoin</code>. Do not load joined and raw R1/R2 files for the same sample unless double counting is intended.</p>
       <p>R1/R2 files are grouped by inferred sample name. Each read is evaluated against the reference in forward and reverse-complement orientations.</p>
       <p class="note"><strong>Reference</strong> is the full alignment target. <strong>Targeting window</strong> is the smaller region within the reference that is highlighted in the heatmap.</p>
+      <p>The downloadable setting template uses one row per amplicon site:</p>
+      <pre><code>site_name,reference_amplicon_sequence,target_positions,assay_type,spacer_sequence,pam_sequence,spacer_window,tale_left_sequence,tale_right_sequence,tale_spacer_sequence,tale_padding,expected_edit,sample_start,sample_end,expected_sample_count,preferred_input,notes</code></pre>
+      <p>Only filled fields are used. <code>assay_type</code> overrides inference. If it is blank, <code>pam_sequence</code> infers Cas / CRISPR, with <code>spacer_sequence</code> required for guide mapping; TALE binding sites or spacer-only rows infer TALE / TALEN; <code>target_positions</code> alone uses custom mode.</p>
     </section>
 
     <section class="panel">
@@ -191,12 +194,14 @@ site_C, ACGTACGT..., 12,18,22</code></pre>
       <h2>7. Results</h2>
       <ul>
         <li><strong>Overview</strong>: site summary, sample-level QC-passed reads, alignment-passed reads, unique reads, mean Q, mean identity, max edit rate, and target source.</li>
+        <li><strong>Sortable overview</strong>: click sample table headers to toggle ascending and descending order.</li>
         <li><strong>Expected edit summary</strong>: target-window expected conversion rate when a base-edit model is selected.</li>
         <li><strong>QC</strong>: filtering counts, low-identity read counts, malformed records, and read-limit status.</li>
         <li><strong>Processed table</strong>: position-level substitution, deletion, insertion, signal reads, and edit percentage.</li>
         <li><strong>Allele spectrum</strong>: unique read sequences with counts, ratios, orientation, identity, and edit signatures.</li>
         <li><strong>Samples</strong>: editable sample labels for figures and exports.</li>
       </ul>
+      <p>The heatmap toolbar supports zoom in/out, fit, reset to 100%, drag-to-pan, Ctrl+wheel zoom, full-figure export, and visible viewport PNG export.</p>
     </section>
 
     <section class="panel">
@@ -205,11 +210,14 @@ site_C, ACGTACGT..., 12,18,22</code></pre>
         <thead><tr><th>File</th><th>Purpose</th></tr></thead>
         <tbody>
           <tr><td><code>processed_mutation_table.csv</code></td><td>Site-aware position-level mutation counts and edit rates.</td></tr>
+          <tr><td><code>target_window_table.csv</code></td><td>Target-window-only subset of the processed mutation table.</td></tr>
+          <tr><td><code>substitution_matrix.csv</code></td><td>Position-level substitution counts by reference and observed base.</td></tr>
           <tr><td><code>allele_spectrum_table.csv</code></td><td>Site-aware unique allele sequences and edit signatures.</td></tr>
           <tr><td><code>qc_read_counts.csv</code></td><td>Site-aware sample read count, filtering, and alignment summary.</td></tr>
           <tr><td><code>amplicon_run_summary.json</code></td><td>Run settings, sample-number filter, site summaries, QC totals, and top edited positions.</td></tr>
           <tr><td><code>amplicon_mutation_heatmap.svg</code></td><td>Editable vector heatmap for the displayed site.</td></tr>
-          <tr><td><code>amplicon_mutation_heatmap.png</code></td><td>Raster heatmap for the displayed site.</td></tr>
+          <tr><td><code>amplicon_mutation_heatmap.png</code></td><td>Full raster heatmap for the displayed site.</td></tr>
+          <tr><td><code>amplicon_mutation_heatmap_visible.png</code></td><td>PNG crop matching the currently visible heatmap viewport after pan/zoom.</td></tr>
           <tr><td><code>amplicon_run_report.md</code></td><td>Run settings, site summary, and sample summary.</td></tr>
           <tr><td><code>amplicon_run_report.html</code></td><td>Self-contained report with heatmap, QC, expected-edit summary, and methods notes.</td></tr>
         </tbody>

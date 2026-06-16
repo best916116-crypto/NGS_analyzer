@@ -11,11 +11,12 @@ https://best916116-crypto.github.io/NGS_analyzer/
 ## What You Can Do
 
 - Drag and drop `.fastq`, `.fq`, `.fastq.gz`, `.fq.gz`, joined FASTQ text files, or choose a folder
-- Import legacy setting CSV files that define `aseq`, `site`, `opts`, and `run_align_mutations`
+- Import Amplicon Analyzer setting CSV files, or legacy setting CSV files that define `aseq`, `site`, `opts`, and `run_align_mutations`
 - Paste a reference amplicon sequence and target positions
 - Run read QC, unique-read aggregation, reference alignment, and mutation calling
 - Track expected base-editor conversions such as `C>T` or `A>G`
 - Review sample-level QC, read depth, alignment-pass counts, alignment identity, mutation heatmap, reference sequence, and allele spectrum
+- Pan, zoom, fit, and save the currently visible heatmap viewport as a PNG
 - Edit displayed sample labels without changing the original FASTQ files
 - Export processed data, run summary, and figures as CSV, JSON, SVG, PNG, Markdown, and self-contained HTML report files
 
@@ -25,7 +26,7 @@ https://best916116-crypto.github.io/NGS_analyzer/
 2. Paste or confirm the reference amplicon sequence.
 3. Choose the assay type: `Custom window`, `Cas / CRISPR`, or `TALE / TALEN`.
 4. Optional: add extra site rows in the multi-site manifest.
-5. Optional: import a legacy setting CSV to fill the reference and target window automatically.
+5. Optional: download the setting CSV template, fill it, then import it to configure the reference, assay, target window, and sample range automatically.
 6. Drag in FASTQ files, choose files, or choose a folder.
 7. Optional: set a first/last sample number to process only numbered sample groups. For 96-well batches, keep `Expected sample count` at `96`.
 8. Review the preflight panel.
@@ -43,7 +44,7 @@ Required:
 | `.fastq.gz` / `.fq.gz` | Gzip-compressed FASTQ files in browsers that support `DecompressionStream` |
 | `.fastjoin` / `.fastqjoin` / `.fqjoin` / `.join` / `.txt` | Joined or concatenated FASTQ text files |
 | reference amplicon sequence | A/C/G/T/N bases pasted into the app |
-| legacy setting CSV | Optional CSV with `arg`, `opts`, and `run_align_mutations` rows |
+| setting CSV | Optional Amplicon Analyzer template CSV, or legacy CSV with `arg`, `opts`, and `run_align_mutations` rows |
 | additional site manifest | Optional rows for multi-site analysis |
 
 The file picker accepts individual files, and the folder picker accepts a directory of many FASTQ-like files. Folder upload uses browser-local file access; files are still processed locally and are not uploaded to a server.
@@ -65,7 +66,29 @@ Amplicon Analyzer is optimized for numbered 96-sample batches:
 3. Set `First sample number` and `Last sample number` if needed.
 4. Confirm that preflight reports `96` selected sample groups.
 
-Legacy setting CSV import maps `--user_region_beg_offset` and `--user_region_length` to 1-based amplicon target positions. For example, if the site starts at position 61, `--user_region_beg_offset 32 --user_region_length 55` becomes target positions `29-83`.
+The recommended setting CSV can be downloaded from the app with `Download template`. Legacy setting CSV import still maps `--user_region_beg_offset` and `--user_region_length` to 1-based amplicon target positions. For example, if the site starts at position 61, `--user_region_beg_offset 32 --user_region_length 55` becomes target positions `29-83`.
+
+## Setting CSV Template
+
+The downloadable template uses one row per amplicon site:
+
+```text
+site_name,reference_amplicon_sequence,target_positions,assay_type,spacer_sequence,pam_sequence,spacer_window,tale_left_sequence,tale_right_sequence,tale_spacer_sequence,tale_padding,expected_edit,sample_start,sample_end,expected_sample_count,preferred_input,notes
+```
+
+Only filled fields are used. Blank fields are ignored.
+
+Assay inference:
+
+| Input columns | Inferred mode |
+| --- | --- |
+| `assay_type` set to `custom`, `cas`, or `tale` | Uses the selected mode |
+| `pam_sequence` filled | Cas / CRISPR; `spacer_sequence` is required to map the guide |
+| `tale_left_sequence` and `tale_right_sequence` | TALE / TALEN |
+| `spacer_sequence` without `pam_sequence` | TALE spacer-only fallback |
+| `target_positions` only | Custom window |
+
+For Cas rows, `spacer_window` uses 1-based spacer coordinates and is mapped to amplicon coordinates after spacer/PAM matching. For TALE/TALEN rows, left/right binding sites are used to infer the intervening spacer. Additional rows are imported into the multi-site manifest with their inferred target positions.
 
 ## Multi-Site Analysis
 
@@ -96,11 +119,14 @@ For TALE/TALEN assays, left/right binding sites are more reliable than spacer-on
 | Output | Use |
 | --- | --- |
 | `processed_mutation_table.csv` | Site-aware position-level substitution, deletion, insertion, and edit-rate table |
+| `target_window_table.csv` | Target-window-only subset of the processed mutation table |
+| `substitution_matrix.csv` | Position-level substitution counts by reference and observed base |
 | `allele_spectrum_table.csv` | Site-aware unique read sequences with counts, ratios, orientation, identity, and edit signature |
 | `qc_read_counts.csv` | Site-aware sample read count and filtering summary |
 | `amplicon_run_summary.json` | Run settings, sample-number filter, site summaries, QC totals, and top edited positions |
 | `amplicon_mutation_heatmap.svg` | Editable vector heatmap |
-| `amplicon_mutation_heatmap.png` | Slide-ready heatmap image |
+| `amplicon_mutation_heatmap.png` | Full slide-ready heatmap image |
+| `amplicon_mutation_heatmap_visible.png` | PNG crop matching the currently visible heatmap viewport |
 | `amplicon_run_report.md` | Markdown record of run settings and sample summary |
 | `amplicon_run_report.html` | Self-contained report with heatmap, QC, site summary, expected-edit summary, and methods notes |
 

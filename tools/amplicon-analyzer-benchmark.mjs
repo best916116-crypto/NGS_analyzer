@@ -13,16 +13,19 @@ function main() {
   const resultDir = path.resolve(configDir, config.outputs?.resultDir || 'results');
   fs.mkdirSync(resultDir, { recursive: true });
 
-  const legacy = config.settingCsv ? parseLegacySettingCsv(path.resolve(configDir, config.settingCsv)) : null;
-  const reference = normalizeSeq(config.reference || legacy?.reference);
+  const setting = config.settingCsv ? parseSettingCsv(path.resolve(configDir, config.settingCsv)) : null;
+  const reference = normalizeSeq(config.reference || setting?.reference);
   if (reference.length < 20) throw new Error('Reference amplicon sequence must be at least 20 bp.');
 
   const settings = normalizeSettings(config.settings);
-  const targetPositions = config.targetPositions || legacy?.targetPositions || '';
-  const assay = deriveAssayTargets(reference, config.assay || {}, targetPositions);
-  const groups = collectInputGroups(config, configDir, legacy);
+  const targetPositions = config.targetPositions || setting?.targetPositions || '';
+  const configAssay = config.assay && Object.keys(config.assay).length ? config.assay : {};
+  const assayInput = Object.keys(configAssay).length ? configAssay : (setting?.assay || {});
+  if (!assayInput.expectedEdit && setting?.expectedEdit) assayInput.expectedEdit = setting.expectedEdit;
+  const assay = deriveAssayTargets(reference, assayInput, targetPositions);
+  const groups = collectInputGroups(config, configDir, setting);
   if (!groups.length) throw new Error('No FASTQ input files were found.');
-  const expectedCount = Number(config.dataset?.expectedSampleCount || 0);
+  const expectedCount = Number(config.dataset?.expectedSampleCount || setting?.expectedSampleCount || 0);
   if (expectedCount && groups.length !== expectedCount) {
     console.warn(`Warning: expected ${expectedCount} sample group(s), found ${groups.length}.`);
   }
@@ -42,8 +45,8 @@ function main() {
     return sample;
   });
 
-  const inputFileLabel = config.dataset?.folder || config.dataset?.file || legacy?.settingCsv || '';
-  const run = buildRunResult(samples, reference, settings, assay, config, inputFileLabel);
+  const inputFileLabel = config.dataset?.folder || config.dataset?.file || setting?.settingCsv || '';
+  const run = buildRunResult(samples, reference, settings, assay, { ...config, assay: assayInput }, inputFileLabel);
   writeOutputs(resultDir, run);
   printSummary(run, resultDir);
 }
@@ -83,7 +86,7 @@ function sampleNameFromFile(filePath) {
     .replace(/\s+/g, '_') || 'sample';
 }
 
-function collectInputGroups(config, configDir, legacy) {
+function collectInputGroups(config, configDir, setting) {
   const dataset = config.dataset || {};
   let filePaths = [];
   if (dataset.folder) {
@@ -95,16 +98,16 @@ function collectInputGroups(config, configDir, legacy) {
     filePaths = dataset.files.map((file) => path.resolve(configDir, file));
   } else if (dataset.file || config.fastq) {
     filePaths = [path.resolve(configDir, dataset.file || config.fastq)];
-  } else if (legacy?.files?.length && legacy.baseDir) {
-    filePaths = legacy.files.map((file) => path.resolve(legacy.baseDir, file));
+  } else if (setting?.files?.length && setting.baseDir) {
+    filePaths = setting.files.map((file) => path.resolve(setting.baseDir, file));
   }
 
-  const preferredKind = dataset.preferredInput || '';
+  const preferredKind = normalizePreferredInput(dataset.preferredInput || setting?.preferredInput || '');
   if (preferredKind === 'joined') filePaths = filePaths.filter(isJoinedFastq);
   if (preferredKind === 'raw') filePaths = filePaths.filter((filePath) => !isJoinedFastq(filePath));
 
-  const start = dataset.sampleStart == null ? null : Number(dataset.sampleStart);
-  const end = dataset.sampleEnd == null ? null : Number(dataset.sampleEnd);
+  const start = dataset.sampleStart == null ? (setting?.sampleStart ?? null) : Number(dataset.sampleStart);
+  const end = dataset.sampleEnd == null ? (setting?.sampleEnd ?? null) : Number(dataset.sampleEnd);
   const explicitSingleSampleName = dataset.sampleName && filePaths.length === 1 ? dataset.sampleName : '';
   const groups = new Map();
   for (const filePath of filePaths) {
@@ -132,6 +135,13 @@ function isJoinedFastq(filePath) {
   return /\.(fastjoin|fastqjoin|fqjoin|join|txt)(\.gz)?$/i.test(path.basename(filePath));
 }
 
+function normalizePreferredInput(value) {
+  const text = String(value || '').trim().toLowerCase();
+  if (/join/.test(text)) return 'joined';
+  if (/raw|fastq|fq|gz/.test(text)) return 'raw';
+  return text;
+}
+
 function inferReadRole(filePath) {
   const name = path.basename(filePath);
   if (/(^|[_\-.])R?1([_\-.]|$)/i.test(name) || /_R1_001/i.test(name)) return 'R1';
@@ -153,11 +163,17 @@ function compareGroups(a, b) {
   return a.sample.localeCompare(b.sample, undefined, { numeric: true, sensitivity: 'base' });
 }
 
-function parseLegacySettingCsv(settingCsv) {
+function parseSettingCsv(settingCsv) {
   const rows = fs.readFileSync(settingCsv, 'utf8')
+    .replace(/^\uFEFF/, '')
     .split(/\r?\n/)
     .map(parseCsvLine)
     .filter((row) => row.some(Boolean));
+  if (rows.some((row) => row[0] === 'run_align_mutations')) return parseLegacySettingRows(settingCsv, rows);
+  return parseModernSettingRows(settingCsv, rows);
+}
+
+function parseLegacySettingRows(settingCsv, rows) {
   const args = new Map();
   const opts = new Map();
   let runRow = null;
@@ -187,6 +203,7 @@ function parseLegacySettingCsv(settingCsv) {
     targetEnd = Math.min(reference.length, targetStart + regionLength - 1);
   }
   return {
+    format: 'legacy',
     settingCsv,
     baseDir: path.dirname(settingCsv),
     reference,
@@ -194,6 +211,150 @@ function parseLegacySettingCsv(settingCsv) {
     targetPositions: `${targetStart}-${targetEnd}`,
     files: runRow.slice(4).map((value) => value.trim()).filter(isFastqLike)
   };
+}
+
+const SETTING_ALIASES = {
+  siteName: ['site_name', 'site', 'site_id', 'name', 'amplicon_name'],
+  reference: ['reference_amplicon_sequence', 'reference_amplicon', 'reference', 'ref_seq', 'refseq', 'amplicon_sequence', 'amplicon', 'aseq'],
+  targetPositions: ['target_positions', 'targeting_window', 'target_window', 'targets', 'manual_targets', 'editing_window', 'user_region'],
+  assayType: ['assay_type', 'assay', 'system', 'nuclease_type'],
+  spacer: ['spacer_sequence', 'spacer', 'guide_sequence', 'guide', 'grna', 'sgrna', 'protospacer'],
+  pam: ['pam_sequence', 'pam', 'pam_pattern'],
+  spacerWindow: ['spacer_window', 'guide_window', 'cas_window', 'editing_window_in_spacer'],
+  taleLeft: ['tale_left_sequence', 'left_tale_sequence', 'left_binding_site', 'tale_left', 'left_binding'],
+  taleRight: ['tale_right_sequence', 'right_tale_sequence', 'right_binding_site', 'tale_right', 'right_binding'],
+  taleSpacer: ['tale_spacer_sequence', 'tale_spacer', 'talen_spacer', 'known_spacer_sequence'],
+  talePadding: ['tale_padding', 'window_padding', 'padding'],
+  expectedEdit: ['expected_edit', 'base_edit', 'conversion'],
+  sampleStart: ['sample_start', 'first_sample_number', 'first_sample', 'start_sample'],
+  sampleEnd: ['sample_end', 'last_sample_number', 'last_sample', 'end_sample'],
+  expectedSampleCount: ['expected_sample_count', 'sample_count', 'plate_size'],
+  preferredInput: ['preferred_input', 'input_type']
+};
+
+function parseModernSettingRows(settingCsv, rows) {
+  if (!rows.length) throw new Error(`Setting CSV is empty: ${settingCsv}`);
+  const header = rows[0].map(normalizeSettingKey);
+  if (!hasAnyHeader(new Set(header), SETTING_ALIASES.reference)) {
+    throw new Error(`Setting CSV needs a reference_amplicon_sequence column: ${settingCsv}`);
+  }
+  const sites = rows.slice(1)
+    .map((row, idx) => parseModernSettingRow(row, header, idx, settingCsv))
+    .filter((site) => site && site.reference);
+  if (!sites.length) throw new Error(`Setting CSV has no usable site rows: ${settingCsv}`);
+  const first = sites[0];
+  return {
+    format: 'modern',
+    settingCsv,
+    baseDir: path.dirname(settingCsv),
+    reference: first.reference,
+    site: first.siteName,
+    targetPositions: first.targetPositions,
+    assay: first.assay,
+    expectedEdit: first.expectedEdit,
+    sampleStart: first.sampleStart,
+    sampleEnd: first.sampleEnd,
+    expectedSampleCount: first.expectedSampleCount,
+    preferredInput: first.preferredInput,
+    files: []
+  };
+}
+
+function parseModernSettingRow(row, header, index, settingCsv) {
+  const get = (key) => getSettingCell(row, header, SETTING_ALIASES[key]);
+  const reference = normalizeSeq(get('reference'));
+  if (!reference) return null;
+  if (reference.length < 20) throw new Error(`Setting CSV row ${index + 2} reference is shorter than 20 bp: ${settingCsv}`);
+  const rawSpacer = normalizeSeq(get('spacer'));
+  const values = {
+    type: normalizeAssayType(get('assayType')),
+    spacer: rawSpacer,
+    pam: normalizePattern(get('pam')),
+    spacerWindow: get('spacerWindow').trim(),
+    left: normalizeSeq(get('taleLeft')),
+    right: normalizeSeq(get('taleRight')),
+    taleSpacer: normalizeSeq(get('taleSpacer')),
+    padding: get('talePadding').trim()
+  };
+  values.type = inferAssayType(values);
+  if (values.type === 'cas') {
+    values.spacer = rawSpacer || values.spacer;
+    values.taleSpacer = '';
+  } else if (values.type === 'tale') {
+    values.taleSpacer = values.taleSpacer || rawSpacer;
+    values.spacer = '';
+  }
+  const manualTargets = get('targetPositions').trim();
+  const derived = deriveAssayTargets(reference, values, manualTargets);
+  return {
+    siteName: get('siteName').trim() || `Site ${index + 1}`,
+    reference,
+    targetPositions: formatTargetSet(derived.targets) || manualTargets,
+    assay: values,
+    expectedEdit: get('expectedEdit').trim().toUpperCase(),
+    sampleStart: parseOptionalWholeNumber(get('sampleStart')),
+    sampleEnd: parseOptionalWholeNumber(get('sampleEnd')),
+    expectedSampleCount: parseOptionalWholeNumber(get('expectedSampleCount')),
+    preferredInput: get('preferredInput').trim().toLowerCase()
+  };
+}
+
+function normalizeSettingKey(value) {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function hasAnyHeader(headerSet, aliases) {
+  return aliases.some((alias) => headerSet.has(normalizeSettingKey(alias)));
+}
+
+function getSettingCell(row, header, aliases) {
+  for (const alias of aliases) {
+    const idx = header.indexOf(normalizeSettingKey(alias));
+    if (idx !== -1) return String(row[idx] || '').trim();
+  }
+  return '';
+}
+
+function normalizeAssayType(value) {
+  const key = String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!key) return '';
+  if (['cas', 'crispr', 'crisprcas', 'cas9', 'cas12', 'baseeditor', 'primeeditor'].includes(key)) return 'cas';
+  if (['tale', 'talen', 'taleen'].includes(key)) return 'tale';
+  if (['custom', 'manual', 'window'].includes(key)) return 'custom';
+  return '';
+}
+
+function inferAssayType(values) {
+  if (values.type) return values.type;
+  if (values.pam) return 'cas';
+  if (values.left || values.right || values.taleSpacer || values.spacer) return 'tale';
+  return 'custom';
+}
+
+function parseOptionalWholeNumber(value) {
+  const text = String(value || '').trim();
+  if (!text) return null;
+  const number = Number(text);
+  return Number.isFinite(number) && Number.isInteger(number) && number >= 0 ? number : null;
+}
+
+function formatTargetSet(targets) {
+  const arr = Array.from(targets || []).sort((a, b) => a - b);
+  if (!arr.length) return '';
+  const ranges = [];
+  let start = arr[0];
+  let prev = arr[0];
+  for (let i = 1; i <= arr.length; i += 1) {
+    const value = arr[i];
+    if (value === prev + 1) {
+      prev = value;
+      continue;
+    }
+    ranges.push(start === prev ? String(start) : `${start}-${prev}`);
+    start = value;
+    prev = value;
+  }
+  return ranges.join(',');
 }
 
 function parseCsvLine(line) {
@@ -252,11 +413,13 @@ function deriveAssayTargets(reference, assay, manualTargets) {
     warning,
     details: {}
   });
+  const assayType = normalizeAssayType(assay.type) || 'custom';
 
-  if (assay.type === 'cas') {
+  if (assayType === 'cas') {
     const spacer = normalizeSeq(assay.spacer || '');
-    const pamPattern = normalizePattern(assay.pam || 'NGG');
-    const spacerWindow = parseTargets(assay.spacerWindow || '4-8');
+    const pamPattern = normalizePattern(assay.pam || '');
+    const windowText = assay.spacerWindow || '4-8';
+    const spacerWindow = parseTargets(windowText);
     if (!spacer) return fallback('Cas mode: no spacer/guide sequence was provided.');
     const match = findSpacerInReference(reference, spacer, pamPattern);
     if (!match) return fallback('Cas mode: spacer was not found in the reference.');
@@ -271,12 +434,12 @@ function deriveAssayTargets(reference, assay, manualTargets) {
     });
     return {
       targets,
-      source: `Cas ${match.orientation} spacer match - PAM ${match.pamMatched ? 'matched' : 'not confirmed'} - spacer window ${assay.spacerWindow || '4-8'}`,
+      source: `Cas ${match.orientation} spacer match - PAM ${pamPattern ? (match.pamMatched ? 'matched' : 'not confirmed') : 'not specified'} - spacer window ${windowText}`,
       warning: match.pamMatched ? '' : 'Cas mode: spacer was found, but the PAM pattern was not confirmed.',
       details: {
         spacer,
         pamPattern,
-        spacerWindow: assay.spacerWindow || '4-8',
+        spacerWindow: windowText,
         orientation: match.orientation,
         spacerStart: match.start,
         spacerEnd: match.end,
@@ -285,7 +448,47 @@ function deriveAssayTargets(reference, assay, manualTargets) {
     };
   }
 
+  if (assayType === 'tale') {
+    const left = normalizeSeq(assay.left || assay.taleLeft || '');
+    const right = normalizeSeq(assay.right || assay.taleRight || '');
+    const spacer = normalizeSeq(assay.taleSpacer || assay.spacer || '');
+    const padding = Math.max(0, Number(assay.padding || assay.talePadding) || 0);
+    if (left && right) {
+      const match = findTalePair(reference, left, right);
+      if (match) {
+        return {
+          targets: positionsFromRange(match.start - padding, match.end + padding, reference.length),
+          source: `TALE/TALEN binding sites matched - spacer ${match.spacerLength} bp${padding ? ` - padding ${padding} bp` : ''}`,
+          warning: '',
+          details: { left, right, spacerLength: match.spacerLength, padding, expectedEdit: assay.expectedEdit || null }
+        };
+      }
+      return fallback('TALE/TALEN mode: left/right binding sites were not found in the reference.');
+    }
+    if (spacer) {
+      const match = findSequenceEitherStrand(reference, spacer);
+      if (match) {
+        return {
+          targets: positionsFromRange(match.start, match.end, reference.length),
+          source: `TALE spacer-only ${match.orientation} match`,
+          warning: 'TALE/TALEN mode: the window was inferred from spacer-only matching. Left/right binding sites are recommended when available.',
+          details: { spacer, orientation: match.orientation, expectedEdit: assay.expectedEdit || null }
+        };
+      }
+      return fallback('TALE/TALEN mode: spacer sequence was not found in the reference.');
+    }
+    return fallback('TALE/TALEN mode: no binding site or spacer sequence was provided.');
+  }
+
   return fallback('');
+}
+
+function positionsFromRange(start, end, length) {
+  const targets = new Set();
+  const first = Math.max(1, Math.min(start, end));
+  const last = Math.min(length, Math.max(start, end));
+  for (let pos = first; pos <= last; pos += 1) targets.add(pos);
+  return targets;
 }
 
 function findSpacerInReference(reference, spacer, pamPattern) {
@@ -353,6 +556,63 @@ function matchIupac(sequence, pattern) {
 function reverseComplementPattern(pattern) {
   const map = { A: 'T', C: 'G', G: 'C', T: 'A', R: 'Y', Y: 'R', S: 'S', W: 'W', K: 'M', M: 'K', B: 'V', V: 'B', D: 'H', H: 'D', N: 'N' };
   return String(pattern || '').split('').reverse().map((base) => map[base] || 'N').join('');
+}
+
+function findSequenceEitherStrand(reference, sequence) {
+  const direct = reference.indexOf(sequence);
+  if (direct !== -1) return { start: direct + 1, end: direct + sequence.length, orientation: 'forward' };
+  const rc = reverseComplement(sequence);
+  const reverse = reference.indexOf(rc);
+  if (reverse !== -1) return { start: reverse + 1, end: reverse + rc.length, orientation: 'reverse' };
+  return null;
+}
+
+function findTalePair(reference, left, right) {
+  const leftVariants = uniqueSeqs([left, reverseComplement(left)]);
+  const rightVariants = uniqueSeqs([right, reverseComplement(right)]);
+  const candidates = [];
+  leftVariants.forEach((leftSeq) => {
+    rightVariants.forEach((rightSeq) => {
+      const leftSites = allOccurrences(reference, leftSeq);
+      const rightSites = allOccurrences(reference, rightSeq);
+      leftSites.forEach((leftStart) => {
+        rightSites.forEach((rightStart) => {
+          const leftEnd = leftStart + leftSeq.length - 1;
+          const rightEnd = rightStart + rightSeq.length - 1;
+          if (leftEnd < rightStart) addTaleCandidate(candidates, leftEnd + 1, rightStart - 1, reference.length);
+          else if (rightEnd < leftStart) addTaleCandidate(candidates, rightEnd + 1, leftStart - 1, reference.length);
+        });
+      });
+    });
+  });
+  candidates.sort((a, b) => b.score - a.score || Math.abs(18 - a.spacerLength) - Math.abs(18 - b.spacerLength));
+  return candidates[0] || null;
+}
+
+function uniqueSeqs(values) {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
+function allOccurrences(reference, query) {
+  const positions = [];
+  let start = reference.indexOf(query);
+  while (start !== -1) {
+    positions.push(start + 1);
+    start = reference.indexOf(query, start + 1);
+  }
+  return positions;
+}
+
+function addTaleCandidate(candidates, start, end, length) {
+  if (end < start) return;
+  const spacerLength = end - start + 1;
+  const rangeScore = spacerLength >= 8 && spacerLength <= 30 ? 100 : 0;
+  candidates.push({
+    start: Math.max(1, start),
+    end: Math.min(length, end),
+    spacerLength,
+    score: rangeScore + Math.max(0, 40 - Math.abs(18 - spacerLength))
+  });
 }
 
 function emptyParsedGroup() {
