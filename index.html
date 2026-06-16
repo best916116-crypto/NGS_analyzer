@@ -772,8 +772,8 @@
         </div>
       </div>
       <div class="top-actions">
-        <span class="privacy-chip">Public benchmark included</span>
-        <span class="privacy-chip">Beta: validate final calls</span>
+        <span class="privacy-chip">Example benchmark</span>
+        <span class="privacy-chip">Static web app</span>
         <a class="btn" href="docs/user_guide.html">User guide</a>
       </div>
     </div>
@@ -782,7 +782,7 @@
   <div class="app">
     <nav class="workflow" aria-label="Analysis workflow">
       <div class="step active" data-step="setup"><b>1</b><span><strong>Setup</strong>Reference and target window</span></div>
-      <div class="step" data-step="upload"><b>2</b><span><strong>Upload</strong>Add FASTQ / FASTQ.GZ</span></div>
+      <div class="step" data-step="files"><b>2</b><span><strong>Files</strong>Add FASTQ / FASTQ.GZ</span></div>
       <div class="step" data-step="process"><b>3</b><span><strong>Run</strong>QC, alignment, calling</span></div>
       <div class="step" data-step="results"><b>4</b><span><strong>Results</strong>Review QC and figures</span></div>
       <div class="step" data-step="export"><b>5</b><span><strong>Export</strong>Save CSV, SVG, PNG</span></div>
@@ -814,7 +814,7 @@
               <button class="btn" id="settingCsvBtn" type="button">Import setting CSV</button>
               <button class="btn" id="settingTemplateBtn" type="button">Download template</button>
             </div>
-            <p class="hint">Imports the Amplicon Analyzer setting template or legacy rows such as arg/aseq, arg/site, opts, and run_align_mutations. Blank template fields are ignored during assay inference.</p>
+            <p class="hint">Imports the Amplicon Analyzer setting template. Blank fields are ignored during assay inference.</p>
           </div>
           <div class="field">
             <label for="assayType">Assay type</label>
@@ -842,8 +842,8 @@
             <p class="hint">Rows use: site name, reference amplicon, target positions. Additional sites use custom target positions.</p>
           </div>
           <div class="btns">
-            <button class="btn" id="demoBtn" type="button">Load demo data</button>
-            <button class="btn" id="publicBenchmarkBtn" type="button">Load public benchmark</button>
+            <button class="btn" id="demoBtn" type="button">Load example data</button>
+            <button class="btn" id="publicBenchmarkBtn" type="button">Load benchmark</button>
             <button class="btn" id="clearBtn" type="button">Reset</button>
           </div>
         </section>
@@ -912,7 +912,7 @@
           </div>
           <div class="field">
             <label for="expectedSampleCount">Expected sample count</label>
-            <input id="expectedSampleCount" type="number" min="1" step="1" value="96">
+            <input id="expectedSampleCount" type="number" min="1" step="1" placeholder="Optional">
           </div>
           <p class="hint">Optional filename filter for numbered samples. Files without a number are skipped while this filter is active.</p>
           <div class="field">
@@ -1005,7 +1005,7 @@
           <div class="result-head">
             <div>
               <h2>Mutation heatmap</h2>
-              <p id="figureSubtitle">Upload FASTQ files or load the demo dataset to generate a figure.</p>
+              <p id="figureSubtitle">Add FASTQ files or load example data to generate a figure.</p>
             </div>
             <div class="btns">
               <label class="site-picker" id="sitePicker"><span>Displayed site</span><select id="siteSelect" class="site-select" aria-label="Displayed site"></select></label>
@@ -1275,7 +1275,7 @@
         }
         if (added.length) {
           addLog(`Added ${added.length} FASTQ file(s).`, 'ok');
-          setStep('upload', ['setup']);
+          setStep('files', ['setup']);
         }
         renderFiles();
         renderSummary();
@@ -1481,16 +1481,16 @@
 
       function parseSettingCsv(text) {
         const rows = String(text || '').replace(/^\uFEFF/, '').split(/\r?\n/).map(parseCsvLine).filter((row) => row.some(Boolean));
-        if (rows.some((row) => String(row[0] || '').trim() === 'run_align_mutations')) return parseLegacySettingRows(rows);
+        if (rows.some((row) => String(row[0] || '').trim() === 'run_align_mutations')) return parseRowBasedSettingRows(rows);
         return parseModernSettingRows(rows);
       }
 
-      function parseLegacySettingCsv(text) {
+      function parseRowBasedSettingCsv(text) {
         const rows = String(text || '').replace(/^\uFEFF/, '').split(/\r?\n/).map(parseCsvLine).filter((row) => row.some(Boolean));
-        return parseLegacySettingRows(rows);
+        return parseRowBasedSettingRows(rows);
       }
 
-      function parseLegacySettingRows(rows) {
+      function parseRowBasedSettingRows(rows) {
         const args = new Map();
         const opts = new Map();
         let runRow = null;
@@ -1528,7 +1528,7 @@
         const files = runRow.slice(4).map((value) => value.trim()).filter((value) => /\.(fastq|fq|fastjoin|fastqjoin|fqjoin|join)(\.gz)?$/i.test(value));
         const numbers = files.map(sampleNumberFromName).filter((value) => value != null).sort((a, b) => a - b);
         return {
-          format: 'legacy',
+          format: 'row-based',
           reference,
           site,
           siteStart,
@@ -1720,14 +1720,18 @@
           els.siteManifest.value = parsed.siteManifest || '';
           if (parsed.expectedEdit && parseExpectedEdit(parsed.expectedEdit)) els.expectedEdit.value = parsed.expectedEdit;
           if (parsed.expectedSampleCount) els.expectedSampleCount.value = String(parsed.expectedSampleCount);
-          const expectedCount = expectedSampleCount() || 96;
+          const expectedCount = expectedSampleCount();
           if (parsed.firstSample != null) {
             els.sampleStart.value = String(parsed.firstSample);
-            els.sampleEnd.value = String(parsed.lastSample != null ? parsed.lastSample : parsed.firstSample + expectedCount - 1);
+            if (parsed.lastSample != null) {
+              els.sampleEnd.value = String(parsed.lastSample);
+            } else if (expectedCount) {
+              els.sampleEnd.value = String(parsed.firstSample + expectedCount - 1);
+            }
           }
           addLog(`Imported ${parsed.format || 'setting'} CSV: ${parsed.reference.length} bp reference, target positions ${parsed.targets || 'none'}, assay ${parsed.assayType || 'custom'}.`, 'ok');
           (parsed.warnings || []).forEach((warning) => addLog(warning, 'warn'));
-          if (parsed.listedSampleCount && parsed.listedSampleCount !== expectedCount) {
+          if (parsed.listedSampleCount && expectedCount && parsed.listedSampleCount !== expectedCount) {
             addLog(`Setting CSV lists ${parsed.listedSampleCount} file(s); using expected ${expectedCount}-sample range from ${parsed.firstSample} to ${parsed.firstSample + expectedCount - 1}.`, 'warn');
           }
           renderPreflight();
@@ -2375,8 +2379,8 @@
           return;
         }
         if (!state.files.length) {
-          addLog('No FASTQ files are available. Add files or load the demo dataset first.', 'warn');
-          setStep('upload', ['setup']);
+          addLog('No FASTQ files are available. Add files or load example data first.', 'warn');
+          setStep('files', ['setup']);
           return;
         }
 
@@ -2392,14 +2396,14 @@
         const sampleRange = getSampleNumberRange();
         if (sampleRange.warning) {
           addLog(sampleRange.warning, 'bad');
-          setStep('upload', ['setup']);
+          setStep('files', ['setup']);
           return;
         }
         const fileGroups = groupFiles(state.files, sampleRange);
         const skippedGroups = skippedGroupsForRange(state.files, sampleRange);
         if (!fileGroups.length) {
           addLog('No sample groups match the sample number filter. Adjust the first/last sample number or clear the filter.', 'warn');
-          setStep('upload', ['setup']);
+          setStep('files', ['setup']);
           return;
         }
         state.processing = true;
@@ -2414,7 +2418,7 @@
         $('runBtn').disabled = true;
         $('cancelBtn').disabled = false;
         setRunBadge('running', 'info');
-        setStep('process', ['setup', 'upload']);
+        setStep('process', ['setup', 'files']);
         setProgress(2, 'Reading FASTQ files.');
         addLog(`Starting analysis for ${fileGroups.length} sample group(s) across ${siteConfigs.length} site(s).`, 'info');
         if (primarySettings.expectedSampleCount && fileGroups.length !== primarySettings.expectedSampleCount) addLog(`Expected ${primarySettings.expectedSampleCount} sample group(s), but ${fileGroups.length} are selected.`, 'warn');
@@ -2465,7 +2469,7 @@
           setRunBadge('done', 'good');
           els.exportBadge.textContent = 'ready';
           els.exportBadge.className = 'badge good';
-          setStep('results', ['setup', 'upload', 'process']);
+          setStep('results', ['setup', 'files', 'process']);
           addLog('Analysis complete.', 'ok');
           renderSummary();
           renderFigure();
@@ -2474,7 +2478,7 @@
           setRunBadge('error', 'bad');
           setProgress(0, error.message || 'Analysis failed.');
           addLog(error.message || String(error), 'bad');
-          setStep('process', ['setup', 'upload']);
+          setStep('process', ['setup', 'files']);
         } finally {
           state.processing = false;
           state.cancelRequested = false;
@@ -3043,7 +3047,7 @@
               <p>Confirm the reference sequence, add FASTQ files, then click Run analysis.</p>
             </div>
           `;
-          els.figureSubtitle.textContent = 'Upload FASTQ files or load the demo dataset to generate a figure.';
+          els.figureSubtitle.textContent = 'Add FASTQ files or load example data to generate a figure.';
           els.exportBadge.textContent = 'waiting';
           els.exportBadge.className = 'badge';
           updateFigureToolbar(false);
@@ -3237,7 +3241,7 @@
           els.tabBody.innerHTML = `
             <div class="empty">
               <strong>No results yet</strong>
-              <p>Load the demo dataset or add FASTQ files, then run the analysis.</p>
+              <p>Load example data or add FASTQ files, then run the analysis.</p>
             </div>
           `;
           return;
@@ -3802,7 +3806,7 @@
           '',
           '## Notes',
           '',
-          `- FASTQ records were parsed, QC-filtered, aligned in both orientations, filtered at ${formatPct(settings.minIdentity * 100, 1)}% minimum alignment identity, and summarized from the selected files.`,
+          `- FASTQ records were parsed, paired R1/R2 reads were joined when a high-confidence overlap was found, and aligned reads were filtered at ${formatPct(settings.minIdentity * 100, 1)}% minimum identity.`,
           '- Edit percentages use position-level covered reads as the denominator; terminal no-coverage gaps are not counted as deletion edits.',
           '- Raw R1/R2 FASTQ files are grouped by sample name and joined by high-confidence overlap consensus when possible; unjoined pairs are reported in QC exports.',
           '- Joined FASTQ files take precedence when raw and joined files are provided for the same sample to avoid double counting.'
@@ -3951,7 +3955,7 @@
         if (!requireResults()) return;
         const svg = buildSvgFigure();
         download('amplicon_mutation_heatmap.svg', svg, 'image/svg+xml;charset=utf-8');
-        setStep('export', ['setup', 'upload', 'process', 'results']);
+        setStep('export', ['setup', 'files', 'process', 'results']);
       }
 
       function exportPng() {
@@ -3983,7 +3987,7 @@
               URL.revokeObjectURL(url);
             }, 800);
           }, 'image/png');
-          setStep('export', ['setup', 'upload', 'process', 'results']);
+          setStep('export', ['setup', 'files', 'process', 'results']);
         };
         image.onerror = () => {
           URL.revokeObjectURL(url);
@@ -4041,7 +4045,7 @@
               URL.revokeObjectURL(url);
             }, 800);
           }, 'image/png');
-          setStep('export', ['setup', 'upload', 'process', 'results']);
+          setStep('export', ['setup', 'files', 'process', 'results']);
         };
         image.onerror = () => {
           URL.revokeObjectURL(url);
@@ -4067,7 +4071,7 @@
         else if (kind === 'summary-json') download('amplicon_run_summary.json', buildSummaryJson(), 'application/json;charset=utf-8');
         else if (kind === 'report') download('amplicon_run_report.md', buildReport(), 'text/markdown;charset=utf-8');
         else if (kind === 'html-report') download('amplicon_run_report.html', buildHtmlReport(), 'text/html;charset=utf-8');
-        setStep('export', ['setup', 'upload', 'process', 'results']);
+        setStep('export', ['setup', 'files', 'process', 'results']);
       }
 
       function createDemoFiles() {
@@ -4127,7 +4131,7 @@
         els.minIdentity.value = '80';
         els.sampleStart.value = '';
         els.sampleEnd.value = '';
-        els.expectedSampleCount.value = '96';
+        els.expectedSampleCount.value = '';
         els.signalMode.value = 'all';
         els.expectedEdit.value = '';
         els.assayType.value = 'custom';
@@ -4170,15 +4174,15 @@
         renderAssayFields();
         renderFiles();
         renderSummary();
-        addLog('Demo FASTQ data loaded. Click Run analysis to generate the figure.', 'ok');
-        setStep('upload', ['setup']);
+        addLog('Example FASTQ data loaded. Click Run analysis to generate the figure.', 'ok');
+        setStep('files', ['setup']);
       }
 
       async function loadPublicBenchmark() {
         if (state.processing) return;
         try {
           els.publicBenchmarkBtn.disabled = true;
-          addLog('Loading public benchmark FASTQ fixture.', 'info');
+          addLog('Loading benchmark FASTQ fixture.', 'info');
           const response = await fetch(PUBLIC_BENCHMARK.fastqPath);
           if (!response.ok) throw new Error(`Could not load ${PUBLIC_BENCHMARK.fastqPath}.`);
           const buffer = await response.arrayBuffer();
@@ -4215,8 +4219,8 @@
           renderSummary();
           renderFigure();
           renderTab();
-          addLog('Public benchmark loaded. Click Run analysis to reproduce the validation result.', 'ok');
-          setStep('upload', ['setup']);
+          addLog('Benchmark loaded. Click Run analysis to reproduce the benchmark result.', 'ok');
+          setStep('files', ['setup']);
         } catch (error) {
           addLog(error.message || String(error), 'bad');
         } finally {
@@ -4290,9 +4294,9 @@
             '',
             '',
             PUBLIC_BENCHMARK.expectedEdit,
-            97,
-            192,
-            96,
+            '',
+            '',
+            '',
             'joined',
             'PAM plus spacer infers Cas / CRISPR. Blank target_positions lets the spacer_window define the target window.'
           ],
@@ -4309,9 +4313,9 @@
             '',
             0,
             '',
-            97,
-            192,
-            96,
+            '',
+            '',
+            '',
             'joined',
             'TALE left/right binding sites infer the spacer between them as the target window.'
           ],
@@ -4330,7 +4334,7 @@
             '',
             '',
             '',
-            96,
+            '',
             'raw',
             'Custom mode uses target_positions directly. Blank assay fields are ignored.'
           ]

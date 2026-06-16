@@ -38,7 +38,7 @@
       gap: 12px;
     }
     main { padding: 34px 0 56px; }
-    h1 { margin: 0 0 8px; font-size: clamp(28px, 5vw, 44px); line-height: 1.15; }
+    h1 { margin: 0 0 8px; font-size: clamp(28px, 5vw, 42px); line-height: 1.15; }
     h2 { margin: 30px 0 10px; font-size: 22px; }
     p { margin: 0 0 12px; color: var(--muted); }
     a { color: var(--accent); font-weight: 800; text-decoration: none; }
@@ -72,6 +72,13 @@
       padding: 2px 5px;
       color: #263746;
     }
+    pre {
+      overflow: auto;
+      background: #eef3f7;
+      border: 1px solid #dce5ed;
+      border-radius: 8px;
+      padding: 12px;
+    }
     table {
       width: 100%;
       border-collapse: collapse;
@@ -103,170 +110,97 @@
   </div>
   <main>
     <h1>Amplicon Analyzer User Guide</h1>
-    <p class="lead">Amplicon Analyzer processes amplicon FASTQ files into QC summaries, reference-aligned mutation calls, heatmap figures, allele spectrum tables, and exportable reports.</p>
+    <p class="lead">Amplicon Analyzer converts amplicon FASTQ files into QC summaries, mutation calls, heatmaps, allele tables, and report files.</p>
 
     <section class="panel">
-      <h2>1. Quick Start</h2>
+      <h2>Quick Start</h2>
       <ol>
-        <li>Open the <a href="../index.html">analyzer</a>.</li>
-        <li>Paste the full expected PCR amplicon sequence into <strong>Reference amplicon sequence</strong>.</li>
-        <li>Select an <strong>Assay type</strong>: Custom window, Cas / CRISPR, or TALE / TALEN.</li>
-        <li>Optional: add extra site rows in <strong>Additional sites</strong>.</li>
-        <li>Optional: download the setting CSV template, fill it, then import it to configure the reference, assay, target window, and sample range automatically.</li>
-        <li>Add FASTQ, FASTQ.GZ, joined FASTQ text files, or choose a folder.</li>
-        <li>Optional: set a first/last sample number to process only numbered sample groups. Keep <strong>Expected sample count</strong> at 96 for 96-well batches.</li>
-        <li>Optional: choose an <strong>Expected base edit</strong> such as C&gt;T or A&gt;G.</li>
-        <li>Click <strong>Run analysis</strong>.</li>
-        <li>Review QC, the heatmap, the processed table, and the allele spectrum.</li>
-        <li>Export CSV, summary JSON, SVG, PNG, Markdown, or self-contained HTML report files.</li>
+        <li>Open the analyzer.</li>
+        <li>Enter the full reference amplicon sequence.</li>
+        <li>Select Custom, Cas / CRISPR, or TALE / TALEN target setup.</li>
+        <li>Add FASTQ files or choose a folder.</li>
+        <li>Review the preflight summary.</li>
+        <li>Run the analysis.</li>
+        <li>Export CSV, JSON, SVG, PNG, Markdown, or HTML results.</li>
       </ol>
-      <p class="note">Use <strong>Load demo data</strong> for a small synthetic run, or <strong>Load public benchmark</strong> to reproduce the CRISPResso2 EMX1 FASTQ fixture in the app.</p>
     </section>
 
     <section class="panel">
-      <h2>2. Inputs</h2>
+      <h2>Inputs</h2>
       <table>
         <thead><tr><th>Input</th><th>Description</th></tr></thead>
         <tbody>
           <tr><td><code>.fastq</code>, <code>.fq</code></td><td>Plain FASTQ files.</td></tr>
-          <tr><td><code>.fastq.gz</code>, <code>.fq.gz</code></td><td>Gzip-compressed FASTQ files in browsers that support <code>DecompressionStream</code>.</td></tr>
-          <tr><td><code>.fastjoin</code>, <code>.fastqjoin</code>, <code>.fqjoin</code>, <code>.join</code>, <code>.txt</code></td><td>Joined or concatenated FASTQ text files.</td></tr>
-          <tr><td>Setting CSV</td><td>Optional Amplicon Analyzer template CSV, or legacy CSV with <code>arg</code>, <code>opts</code>, and <code>run_align_mutations</code> rows.</td></tr>
-          <tr><td>Reference amplicon</td><td>The full expected PCR amplicon sequence, using A/C/G/T/N bases.</td></tr>
+          <tr><td><code>.fastq.gz</code>, <code>.fq.gz</code></td><td>Gzip-compressed FASTQ files.</td></tr>
+          <tr><td><code>.fastjoin</code>, <code>.fastqjoin</code>, <code>.fqjoin</code>, <code>.join</code>, <code>.txt</code></td><td>Joined FASTQ-style text files.</td></tr>
+          <tr><td>Reference amplicon</td><td>Full expected PCR amplicon sequence.</td></tr>
+          <tr><td>Setting CSV</td><td>Optional run configuration.</td></tr>
         </tbody>
       </table>
-      <p>The file picker accepts individual files. The folder picker accepts a directory of many FASTQ-like files through browser-local file access.</p>
-      <p>Illumina-style names such as <code>97_S97_L001_R1_001.fastq.gz</code> are normalized to sample <code>97</code>, matching joined files such as <code>97.fastqjoin</code>. If joined and raw R1/R2 files are loaded for the same sample, joined files are used and raw files are skipped to avoid double counting.</p>
-      <p>R1/R2 files are grouped by inferred sample name. If raw R1/R2 FASTQ files are supplied without joined FASTQ files, R2 is reverse-complemented and high-confidence overlaps are converted into consensus reads before QC and alignment.</p>
-      <p class="note"><strong>Reference</strong> is the full alignment target. <strong>Targeting window</strong> is the smaller region within the reference that is highlighted in the heatmap.</p>
-      <p>The downloadable setting template uses one row per amplicon site:</p>
+      <p>R1/R2 filenames are grouped by inferred sample name. Raw pairs are converted to overlap-consensus reads when a high-confidence overlap is found. Unjoined pairs remain visible in QC exports.</p>
+      <p>If joined and raw files are provided for the same sample, joined files are used for that sample.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Target Setup</h2>
+      <table>
+        <thead><tr><th>Mode</th><th>Target window</th></tr></thead>
+        <tbody>
+          <tr><td>Custom</td><td>Uses the 1-based target positions entered in the app.</td></tr>
+          <tr><td>Cas / CRISPR</td><td>Finds the spacer, checks the PAM pattern when available, and maps the spacer window to amplicon coordinates.</td></tr>
+          <tr><td>TALE / TALEN</td><td>Finds left and right TALE binding sites and uses the intervening spacer.</td></tr>
+        </tbody>
+      </table>
+      <p class="note">The reference is the full alignment target. The targeting window is the highlighted region used for target-window summaries.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Setting CSV</h2>
+      <p>The app can export a template with one row per amplicon site:</p>
       <pre><code>site_name,reference_amplicon_sequence,target_positions,assay_type,spacer_sequence,pam_sequence,spacer_window,tale_left_sequence,tale_right_sequence,tale_spacer_sequence,tale_padding,expected_edit,sample_start,sample_end,expected_sample_count,preferred_input,notes</code></pre>
-      <p>Only filled fields are used. <code>assay_type</code> overrides inference. If it is blank, <code>pam_sequence</code> infers Cas / CRISPR, with <code>spacer_sequence</code> required for guide mapping; TALE binding sites or spacer-only rows infer TALE / TALEN; <code>target_positions</code> alone uses custom mode.</p>
+      <p>Blank fields are ignored. Filled PAM fields infer Cas / CRISPR. TALE binding-site fields infer TALE / TALEN. Target positions alone use Custom mode.</p>
     </section>
 
     <section class="panel">
-      <h2>3. Multi-Site Analysis</h2>
-      <p>Use the primary reference fields for the first site. Add optional extra sites as one row per amplicon:</p>
-      <pre><code>site_name, reference_amplicon_sequence, target_positions
-site_B, ACGTACGT..., 16-23
+      <h2>Multi-Site Analysis</h2>
+      <p>Add extra rows in <strong>Additional sites</strong>:</p>
+      <pre><code>site_B, ACGTACGT..., 16-23
 site_C, ACGTACGT..., 12,18,22</code></pre>
-      <p>FASTQ files are parsed and QC-filtered once per sample group, then each site reference is aligned and summarized separately. The heatmap displays one selected site at a time. CSV and report exports include all analyzed sites.</p>
+      <p>FASTQ files are parsed once per sample group, then each site reference is aligned and summarized separately.</p>
     </section>
 
     <section class="panel">
-      <h2>4. Assay Type and Targeting Window</h2>
+      <h2>Exports</h2>
       <table>
-        <thead><tr><th>Mode</th><th>How the targeting window is determined</th></tr></thead>
+        <thead><tr><th>File</th><th>Contents</th></tr></thead>
         <tbody>
-          <tr><td>Custom window</td><td>Uses the manual 1-based target positions entered in the app.</td></tr>
-          <tr><td>Cas / CRISPR</td><td>Finds the spacer/guide sequence in the reference, checks the PAM pattern when possible, then maps the spacer window to amplicon coordinates.</td></tr>
-          <tr><td>TALE / TALEN</td><td>Finds left and right TALE binding sites and uses the intervening spacer as the default targeting window.</td></tr>
-        </tbody>
-      </table>
-      <p>For TALE/TALEN assays, left/right binding sites are more reliable than spacer-only input because they define orientation and the intervening region.</p>
-    </section>
-
-    <section class="panel">
-      <h2>5. Processing Settings</h2>
-      <table>
-        <thead><tr><th>Setting</th><th>Meaning</th></tr></thead>
-        <tbody>
-          <tr><td>Minimum mean Q</td><td>Reads below this mean Phred quality are excluded.</td></tr>
-          <tr><td>Minimum read length</td><td>Short reads below this length are excluded.</td></tr>
-          <tr><td>Read limit per sample</td><td>Maximum reads processed per sample group.</td></tr>
-          <tr><td>Minimum alignment identity (%)</td><td>Reads that pass FASTQ QC but align below this threshold are excluded from mutation calling.</td></tr>
-          <tr><td>First/last sample number</td><td>Optional filter for large numbered batches. Files without a number are skipped while this filter is active.</td></tr>
-          <tr><td>Expected sample count</td><td>Preflight warning threshold for numbered batches. Default is 96.</td></tr>
-          <tr><td>Edit signal shown in heatmap</td><td>Heatmap signal: substitution + indel, substitution only, or indel only.</td></tr>
-          <tr><td>Expected base edit</td><td>Expected conversion model for base-editor summaries and exports.</td></tr>
-          <tr><td>Exclude reads containing N bases</td><td>Removes reads with ambiguous bases during QC.</td></tr>
+          <tr><td><code>processed_mutation_table.csv</code></td><td>Position-level mutation counts and edit rates.</td></tr>
+          <tr><td><code>target_window_table.csv</code></td><td>Target-window rows from the mutation table.</td></tr>
+          <tr><td><code>substitution_matrix.csv</code></td><td>Reference-to-observed substitution counts.</td></tr>
+          <tr><td><code>allele_spectrum_table.csv</code></td><td>Unique allele sequences and edit signatures.</td></tr>
+          <tr><td><code>qc_read_counts.csv</code></td><td>Filtering, alignment, and paired-end join summary.</td></tr>
+          <tr><td><code>amplicon_run_summary.json</code></td><td>Run settings and top-level summaries.</td></tr>
+          <tr><td><code>amplicon_mutation_heatmap.svg</code></td><td>Editable vector heatmap.</td></tr>
+          <tr><td><code>amplicon_mutation_heatmap.png</code></td><td>Full heatmap PNG.</td></tr>
+          <tr><td><code>amplicon_mutation_heatmap_visible.png</code></td><td>Current heatmap viewport PNG.</td></tr>
+          <tr><td><code>amplicon_run_report.md</code></td><td>Markdown run report.</td></tr>
+          <tr><td><code>amplicon_run_report.html</code></td><td>Self-contained HTML report.</td></tr>
         </tbody>
       </table>
     </section>
 
     <section class="panel">
-      <h2>6. 96-Sample Batch Runs</h2>
-      <p>For routine 96-sample batches, import the setting CSV, choose the fastqjoin or FASTQ.GZ folder, and confirm that preflight reports 96 selected sample groups. Raw FASTQ.GZ R1/R2 files are joined automatically when a high-confidence overlap is found.</p>
-      <p>Legacy setting CSV import maps <code>--user_region_beg_offset</code> and <code>--user_region_length</code> to 1-based amplicon target positions. For example, if the site starts at position 61, <code>--user_region_beg_offset 32 --user_region_length 55</code> becomes target positions <code>29-83</code>.</p>
-    </section>
-
-    <section class="panel">
-      <h2>7. Results</h2>
-      <ul>
-        <li><strong>Overview</strong>: site summary, sample-level QC-passed reads, alignment-passed reads, unique reads, mean Q, mean identity, max edit rate, and target source.</li>
-        <li><strong>Sortable overview</strong>: click sample table headers to toggle ascending and descending order.</li>
-        <li><strong>Expected edit summary</strong>: target-window expected conversion rate when a base-edit model is selected.</li>
-        <li><strong>QC</strong>: filtering counts, low-identity read counts, paired-end join counts, malformed records, and read-limit status.</li>
-        <li><strong>Processed table</strong>: position-level substitution, deletion, insertion, signal reads, and edit percentage.</li>
-        <li><strong>Allele spectrum</strong>: unique read sequences with counts, ratios, orientation, identity, and edit signatures.</li>
-        <li><strong>Samples</strong>: editable sample labels for figures and exports.</li>
-      </ul>
-      <p>The heatmap toolbar supports zoom in/out, fit, reset to 100%, drag-to-pan, Ctrl+wheel zoom, full-figure export, and visible viewport PNG export.</p>
-    </section>
-
-    <section class="panel">
-      <h2>8. Exports</h2>
-      <table>
-        <thead><tr><th>File</th><th>Purpose</th></tr></thead>
-        <tbody>
-          <tr><td><code>processed_mutation_table.csv</code></td><td>Site-aware position-level mutation counts and edit rates.</td></tr>
-          <tr><td><code>target_window_table.csv</code></td><td>Target-window-only subset of the processed mutation table.</td></tr>
-          <tr><td><code>substitution_matrix.csv</code></td><td>Position-level substitution counts by reference and observed base.</td></tr>
-          <tr><td><code>allele_spectrum_table.csv</code></td><td>Site-aware unique allele sequences and edit signatures.</td></tr>
-          <tr><td><code>qc_read_counts.csv</code></td><td>Site-aware sample read count, filtering, and alignment summary.</td></tr>
-          <tr><td><code>amplicon_run_summary.json</code></td><td>Run settings, sample-number filter, site summaries, QC totals, and top edited positions.</td></tr>
-          <tr><td><code>amplicon_mutation_heatmap.svg</code></td><td>Editable vector heatmap for the displayed site.</td></tr>
-          <tr><td><code>amplicon_mutation_heatmap.png</code></td><td>Full raster heatmap for the displayed site.</td></tr>
-          <tr><td><code>amplicon_mutation_heatmap_visible.png</code></td><td>PNG crop matching the currently visible heatmap viewport after pan/zoom.</td></tr>
-          <tr><td><code>amplicon_run_report.md</code></td><td>Run settings, site summary, and sample summary.</td></tr>
-          <tr><td><code>amplicon_run_report.html</code></td><td>Self-contained report with heatmap, QC, expected-edit summary, and methods notes.</td></tr>
-        </tbody>
-      </table>
-    </section>
-
-    <section class="panel">
-      <h2>9. Calculation</h2>
-      <p>For each sample and position, edit percentage is calculated as:</p>
+      <h2>Calculation</h2>
       <pre><code>edit percentage = selected signal reads at position / position-level covered reads * 100</code></pre>
-      <p>Coordinates are 1-based amplicon positions. The heatmap uses a black grid for amplicon bases, red outlines and labels for target positions, and a reference sequence row below the figure. Terminal no-coverage gaps are not counted as deletion edits.</p>
-      <p>When an expected base edit is selected, expected edit percentage is calculated only across editable target-window bases. For example, C&gt;T uses target positions where the reference base is C.</p>
+      <p>Coordinates are 1-based amplicon positions. Reads below the minimum alignment identity are excluded from mutation calling.</p>
+      <p>When an expected base edit is selected, expected-edit percentages are calculated only across editable target-window bases.</p>
     </section>
 
     <section class="panel">
-      <h2>10. Public FASTQ Benchmark</h2>
-      <p>Amplicon Analyzer includes a reproducible fixture using the CRISPResso2 EMX1 base-editor example FASTQ dataset.</p>
-      <table>
-        <thead><tr><th>Metric</th><th>Result</th></tr></thead>
-        <tbody>
-          <tr><td>QC-passed reads</td><td>25,000</td></tr>
-          <tr><td>Alignment-passed reads</td><td>24,976</td></tr>
-          <tr><td>Low-identity reads excluded</td><td>24</td></tr>
-          <tr><td>Alignment-passed unique reads</td><td>3,915</td></tr>
-          <tr><td>Mean alignment identity</td><td>99.678%</td></tr>
-          <tr><td>Top target-window edit</td><td>C136, 27.709% substitution signal</td></tr>
-          <tr><td>Dominant substitution class</td><td>C&gt;T, 12,877 substitution reads</td></tr>
-        </tbody>
-      </table>
-      <p>Benchmark files and generated outputs are stored under <code>benchmarks/public/crispresso2_base_editor/</code>.</p>
-      <p>The analyzer page includes a <strong>Load public benchmark</strong> button that fills the reference, Cas spacer, PAM, read limit, and FASTQ file automatically.</p>
-    </section>
-
-    <section class="panel">
-      <h2>11. Paired-End Validation</h2>
-      <p>The repository includes a synthetic paired-end truth test:</p>
-      <pre><code>node tools/validate-paired-end.mjs</code></pre>
-      <p>The test creates raw R1/R2 FASTQ files and a matching joined FASTQ fixture, runs both paths through the analyzer, and checks joined read count, aligned read count, expected edit position, and edit percentage.</p>
-    </section>
-
-    <section class="panel">
-      <h2>12. Current Scope</h2>
-      <ul>
-        <li>FASTQ parsing, paired-end overlap consensus, QC, unique-read aggregation, reference alignment, and mutation calling are performed in the app.</li>
-        <li>Paired-end QC exports include paired reads, joined pairs, unjoined pairs, and unpaired reads.</li>
-        <li>Adapter trimming is not performed; trim adapters upstream when needed.</li>
-        <li>Very large FASTQ files are constrained by local browser memory and CPU.</li>
-      </ul>
-      <p class="note">For production-scale primary analysis, use Amplicon Analyzer as a fast review/export layer and validate final calls against an established command-line workflow.</p>
+      <h2>Validation</h2>
+      <pre><code>node tools/amplicon-analyzer-benchmark.mjs benchmarks/public/crispresso2_base_editor/config.json
+node tools/validate-paired-end.mjs</code></pre>
+      <p>The first command runs the public FASTQ benchmark. The second checks raw R1/R2 analysis against a matched joined FASTQ fixture.</p>
     </section>
   </main>
 </body>

@@ -1,6 +1,6 @@
 # CRISPResso2 EMX1 Base Editor Benchmark
 
-This fixture uses the public CRISPResso2 base-editor example FASTQ file and analyzes it with the local Amplicon Analyzer benchmark runner.
+This fixture uses the CRISPResso2 base-editor example FASTQ file and analyzes it with the Amplicon Analyzer CLI runner.
 
 Source:
 

@@ -165,11 +165,11 @@ function parseSettingCsv(settingCsv) {
     .split(/\r?\n/)
     .map(parseCsvLine)
     .filter((row) => row.some(Boolean));
-  if (rows.some((row) => row[0] === 'run_align_mutations')) return parseLegacySettingRows(settingCsv, rows);
+  if (rows.some((row) => row[0] === 'run_align_mutations')) return parseRowBasedSettingRows(settingCsv, rows);
   return parseModernSettingRows(settingCsv, rows);
 }
 
-function parseLegacySettingRows(settingCsv, rows) {
+function parseRowBasedSettingRows(settingCsv, rows) {
   const args = new Map();
   const opts = new Map();
   let runRow = null;
@@ -178,14 +178,14 @@ function parseLegacySettingRows(settingCsv, rows) {
     if (row[0] === 'opts') opts.set(row[1], row[2] || '');
     if (row[0] === 'run_align_mutations') runRow = row;
   }
-  if (!runRow) throw new Error(`Legacy setting CSV has no run_align_mutations row: ${settingCsv}`);
+  if (!runRow) throw new Error(`Row-based setting CSV has no run_align_mutations row: ${settingCsv}`);
   const optsKey = runRow[1] || '';
   const referenceKey = runRow[2] || Array.from(args.keys()).find((key) => /^aseq/i.test(key));
   const siteKey = runRow[3] || Array.from(args.keys()).find((key) => /^site/i.test(key));
   const reference = normalizeSeq(args.get(referenceKey));
   const site = normalizeSeq(args.get(siteKey));
   const siteIndex = reference.indexOf(site);
-  if (reference.length < 20 || !site || siteIndex < 0) throw new Error(`Could not map legacy setting CSV reference/site: ${settingCsv}`);
+  if (reference.length < 20 || !site || siteIndex < 0) throw new Error(`Could not map row-based setting CSV reference/site: ${settingCsv}`);
   const optionText = opts.get(optsKey) || '';
   const lengthMatch = optionText.match(/--user_region_length\s+(\d+)/i);
   const offsetMatch = optionText.match(/--user_region_beg_offset\s+(\d+)/i);
@@ -199,7 +199,7 @@ function parseLegacySettingRows(settingCsv, rows) {
     targetEnd = Math.min(reference.length, targetStart + regionLength - 1);
   }
   return {
-    format: 'legacy',
+    format: 'row-based',
     settingCsv,
     baseDir: path.dirname(settingCsv),
     reference,
