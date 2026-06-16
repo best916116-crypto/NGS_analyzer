@@ -136,8 +136,8 @@
         </tbody>
       </table>
       <p>The file picker accepts individual files. The folder picker accepts a directory of many FASTQ-like files through browser-local file access.</p>
-      <p>Illumina-style names such as <code>97_S97_L001_R1_001.fastq.gz</code> are normalized to sample <code>97</code>, matching joined files such as <code>97.fastqjoin</code>. Do not load joined and raw R1/R2 files for the same sample unless double counting is intended.</p>
-      <p>R1/R2 files are grouped by inferred sample name. Each read is evaluated against the reference in forward and reverse-complement orientations.</p>
+      <p>Illumina-style names such as <code>97_S97_L001_R1_001.fastq.gz</code> are normalized to sample <code>97</code>, matching joined files such as <code>97.fastqjoin</code>. If joined and raw R1/R2 files are loaded for the same sample, joined files are used and raw files are skipped to avoid double counting.</p>
+      <p>R1/R2 files are grouped by inferred sample name. If raw R1/R2 FASTQ files are supplied without joined FASTQ files, R2 is reverse-complemented and high-confidence overlaps are converted into consensus reads before QC and alignment.</p>
       <p class="note"><strong>Reference</strong> is the full alignment target. <strong>Targeting window</strong> is the smaller region within the reference that is highlighted in the heatmap.</p>
       <p>The downloadable setting template uses one row per amplicon site:</p>
       <pre><code>site_name,reference_amplicon_sequence,target_positions,assay_type,spacer_sequence,pam_sequence,spacer_window,tale_left_sequence,tale_right_sequence,tale_spacer_sequence,tale_padding,expected_edit,sample_start,sample_end,expected_sample_count,preferred_input,notes</code></pre>
@@ -186,7 +186,7 @@ site_C, ACGTACGT..., 12,18,22</code></pre>
 
     <section class="panel">
       <h2>6. 96-Sample Batch Runs</h2>
-      <p>For routine 96-sample batches, import the setting CSV, choose the fastqjoin or FASTQ.GZ folder, and confirm that preflight reports 96 selected sample groups.</p>
+      <p>For routine 96-sample batches, import the setting CSV, choose the fastqjoin or FASTQ.GZ folder, and confirm that preflight reports 96 selected sample groups. Raw FASTQ.GZ R1/R2 files are joined automatically when a high-confidence overlap is found.</p>
       <p>Legacy setting CSV import maps <code>--user_region_beg_offset</code> and <code>--user_region_length</code> to 1-based amplicon target positions. For example, if the site starts at position 61, <code>--user_region_beg_offset 32 --user_region_length 55</code> becomes target positions <code>29-83</code>.</p>
     </section>
 
@@ -196,7 +196,7 @@ site_C, ACGTACGT..., 12,18,22</code></pre>
         <li><strong>Overview</strong>: site summary, sample-level QC-passed reads, alignment-passed reads, unique reads, mean Q, mean identity, max edit rate, and target source.</li>
         <li><strong>Sortable overview</strong>: click sample table headers to toggle ascending and descending order.</li>
         <li><strong>Expected edit summary</strong>: target-window expected conversion rate when a base-edit model is selected.</li>
-        <li><strong>QC</strong>: filtering counts, low-identity read counts, malformed records, and read-limit status.</li>
+        <li><strong>QC</strong>: filtering counts, low-identity read counts, paired-end join counts, malformed records, and read-limit status.</li>
         <li><strong>Processed table</strong>: position-level substitution, deletion, insertion, signal reads, and edit percentage.</li>
         <li><strong>Allele spectrum</strong>: unique read sequences with counts, ratios, orientation, identity, and edit signatures.</li>
         <li><strong>Samples</strong>: editable sample labels for figures and exports.</li>
@@ -252,10 +252,17 @@ site_C, ACGTACGT..., 12,18,22</code></pre>
     </section>
 
     <section class="panel">
-      <h2>11. Current Scope</h2>
+      <h2>11. Paired-End Validation</h2>
+      <p>The repository includes a synthetic paired-end truth test:</p>
+      <pre><code>node tools/validate-paired-end.mjs</code></pre>
+      <p>The test creates raw R1/R2 FASTQ files and a matching joined FASTQ fixture, runs both paths through the analyzer, and checks joined read count, aligned read count, expected edit position, and edit percentage.</p>
+    </section>
+
+    <section class="panel">
+      <h2>12. Current Scope</h2>
       <ul>
-        <li>FASTQ parsing, QC, unique-read aggregation, reference alignment, and mutation calling are performed in the app.</li>
-        <li>Paired-end files are grouped by sample, but paired-end consensus merging is not performed.</li>
+        <li>FASTQ parsing, paired-end overlap consensus, QC, unique-read aggregation, reference alignment, and mutation calling are performed in the app.</li>
+        <li>Paired-end QC exports include paired reads, joined pairs, unjoined pairs, and unpaired reads.</li>
         <li>Adapter trimming is not performed; trim adapters upstream when needed.</li>
         <li>Very large FASTQ files are constrained by local browser memory and CPU.</li>
       </ul>

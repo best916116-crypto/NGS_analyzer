@@ -31,11 +31,7 @@ function main() {
   }
 
   const samples = groups.map((group, index) => {
-    const parsedGroup = emptyParsedGroup();
-    for (const filePath of group.paths) {
-      const parsed = parseFastqText(readFastq(filePath), settings);
-      mergeParsedGroup(parsedGroup, parsed);
-    }
+    const parsedGroup = parseInputGroup(group, settings);
     const sample = analyzeSample({
       sample: group.sample,
       files: group.files,
@@ -627,7 +623,17 @@ function emptyParsedGroup() {
     readLimitReached: false,
     unique: new Map(),
     meanQualityParts: [],
-    readLengths: []
+    totalQuality: 0,
+    qualityReads: 0,
+    basesKept: 0,
+    readLengths: [],
+    warnings: [],
+    pairStats: {
+      pairedReads: 0,
+      joinedPairs: 0,
+      unjoinedPairs: 0,
+      unpairedReads: 0
+    }
   };
 }
 
@@ -640,8 +646,18 @@ function mergeParsedGroup(target, parsed) {
   target.droppedQuality += parsed.droppedQuality;
   target.droppedN += parsed.droppedN;
   target.readLimitReached = target.readLimitReached || parsed.readLimitReached;
+  target.totalQuality += parsed.totalQuality || 0;
+  target.qualityReads += parsed.qualityReads || 0;
+  target.basesKept += parsed.basesKept || 0;
   if (parsed.keptRecords) target.meanQualityParts.push({ mean: parsed.meanQuality, n: parsed.keptRecords });
   target.readLengths.push(...parsed.readLengths);
+  (parsed.warnings || []).forEach((warning) => target.warnings.push(warning));
+  if (parsed.pairStats) {
+    target.pairStats.pairedReads += parsed.pairStats.pairedReads || 0;
+    target.pairStats.joinedPairs += parsed.pairStats.joinedPairs || 0;
+    target.pairStats.unjoinedPairs += parsed.pairStats.unjoinedPairs || 0;
+    target.pairStats.unpairedReads += parsed.pairStats.unpairedReads || 0;
+  }
   parsed.unique.forEach((value, sequence) => {
     const current = target.unique.get(sequence) || { sequence, count: 0, qualitySum: 0 };
     current.count += value.count;
@@ -655,28 +671,41 @@ function mergeParsedGroup(target, parsed) {
 }
 
 function groupMeanQuality(group) {
+  if (group.qualityReads) return group.totalQuality / group.qualityReads;
   const total = group.meanQualityParts.reduce((sum, part) => sum + part.n, 0);
   if (!total) return 0;
   return group.meanQualityParts.reduce((sum, part) => sum + part.mean * part.n, 0) / total;
 }
 
 function parseFastqText(text, settings) {
+  const parsed = emptyParsedGroup();
+  const lines = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  parsed.estimatedRecords = Math.floor(lines.length / 4);
+  const limit = Math.min(settings.readLimit, parsed.estimatedRecords || settings.readLimit);
+
+  for (let i = 0; i + 3 < lines.length && parsed.totalRecords < limit; i += 4) {
+    const header = lines[i];
+    const seqLine = lines[i + 1];
+    const plus = lines[i + 2];
+    const qualLine = lines[i + 3];
+    if (!header || header[0] !== '@' || !plus || plus[0] !== '+') {
+      parsed.malformedRecords += 1;
+      continue;
+    }
+    addReadToParsed(parsed, seqLine, qualLine, settings);
+  }
+  parsed.readLimitReached = parsed.estimatedRecords > limit;
+  return finalizeParsed(parsed);
+}
+
+function parseFastqRecords(text, limit) {
   const lines = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
   const estimatedRecords = Math.floor(lines.length / 4);
-  const limit = Math.min(settings.readLimit, estimatedRecords || settings.readLimit);
-  const unique = new Map();
-  const readLengths = [];
-  let totalRecords = 0;
-  let keptRecords = 0;
+  const maxRecords = Math.min(Math.max(1, Number(limit) || estimatedRecords || 1), estimatedRecords || Number(limit) || 1);
+  const records = [];
   let malformedRecords = 0;
-  let droppedShort = 0;
-  let droppedQuality = 0;
-  let droppedN = 0;
-  let totalQuality = 0;
-  let qualityReads = 0;
-  let basesKept = 0;
-
-  for (let i = 0; i + 3 < lines.length && totalRecords < limit; i += 4) {
+  let totalRecords = 0;
+  for (let i = 0; i + 3 < lines.length && totalRecords < maxRecords; i += 4) {
     const header = lines[i];
     const seqLine = lines[i + 1];
     const plus = lines[i + 2];
@@ -692,46 +721,213 @@ function parseFastqText(text, settings) {
       malformedRecords += 1;
       continue;
     }
-    if (seq.length < settings.minLen) {
-      droppedShort += 1;
-      continue;
-    }
-    if (settings.dropN && seq.includes('N')) {
-      droppedN += 1;
-      continue;
-    }
-    const meanQ = meanQuality(qual.slice(0, seq.length));
-    totalQuality += meanQ;
-    qualityReads += 1;
-    if (meanQ < settings.minQ) {
-      droppedQuality += 1;
-      continue;
-    }
-    keptRecords += 1;
-    basesKept += seq.length;
-    readLengths.push(seq.length);
-    const current = unique.get(seq) || { sequence: seq, count: 0, qualitySum: 0 };
-    current.count += 1;
-    current.qualitySum += meanQ;
-    unique.set(seq, current);
+    records.push({ id: normalizeReadId(header), sequence: seq, quality: qual.slice(0, seq.length) });
+  }
+  return { estimatedRecords, totalRecords, malformedRecords, readLimitReached: estimatedRecords > maxRecords, records };
+}
+
+function addReadToParsed(parsed, seqLine, qualLine, settings) {
+  parsed.totalRecords += 1;
+  const seq = normalizeSeq(seqLine);
+  const qual = String(qualLine || '').trim();
+  if (!seq || qual.length < seq.length) {
+    parsed.malformedRecords += 1;
+    return false;
+  }
+  if (seq.length < settings.minLen) {
+    parsed.droppedShort += 1;
+    return false;
+  }
+  if (settings.dropN && seq.includes('N')) {
+    parsed.droppedN += 1;
+    return false;
+  }
+  const meanQ = meanQuality(qual.slice(0, seq.length));
+  parsed.totalQuality += meanQ;
+  parsed.qualityReads += 1;
+  if (meanQ < settings.minQ) {
+    parsed.droppedQuality += 1;
+    return false;
+  }
+  parsed.keptRecords += 1;
+  parsed.basesKept += seq.length;
+  parsed.readLengths.push(seq.length);
+  const current = parsed.unique.get(seq) || { sequence: seq, count: 0, qualitySum: 0 };
+  current.count += 1;
+  current.qualitySum += meanQ;
+  parsed.unique.set(seq, current);
+  return true;
+}
+
+function finalizeParsed(parsed) {
+  parsed.uniqueReads = parsed.unique.size;
+  parsed.meanQuality = parsed.qualityReads ? parsed.totalQuality / parsed.qualityReads : 0;
+  parsed.meanReadLength = parsed.keptRecords ? parsed.basesKept / parsed.keptRecords : 0;
+  parsed.medianReadLength = median(parsed.readLengths);
+  return parsed;
+}
+
+function parseInputGroup(group, settings) {
+  const parsedGroup = emptyParsedGroup();
+  const joinedPaths = group.paths.filter(isJoinedFastq);
+  const rawPaths = group.paths.filter((filePath) => !isJoinedFastq(filePath));
+  if (joinedPaths.length) {
+    for (const filePath of joinedPaths) mergeParsedGroup(parsedGroup, parseFastqText(readFastq(filePath), settings));
+    if (rawPaths.length) parsedGroup.warnings.push('raw R1/R2 files skipped because joined FASTQ files were also provided');
+    return finalizeParsed(parsedGroup);
   }
 
-  return {
-    estimatedRecords,
-    readLimitReached: estimatedRecords > limit,
-    totalRecords,
-    keptRecords,
-    malformedRecords,
-    droppedShort,
-    droppedQuality,
-    droppedN,
-    unique,
-    uniqueReads: unique.size,
-    meanQuality: qualityReads ? totalQuality / qualityReads : 0,
-    meanReadLength: keptRecords ? basesKept / keptRecords : 0,
-    readLengths,
-    medianReadLength: median(readLengths)
-  };
+  const r1Paths = rawPaths.filter((filePath) => inferReadRole(filePath) === 'R1');
+  const r2Paths = rawPaths.filter((filePath) => inferReadRole(filePath) === 'R2');
+  const singlePaths = rawPaths.filter((filePath) => inferReadRole(filePath) === 'single');
+  if (r1Paths.length && r2Paths.length) {
+    const paired = parsePairedFastqFiles(r1Paths, r2Paths, settings);
+    mergeParsedGroup(parsedGroup, paired);
+    if (!paired.pairStats.joinedPairs && paired.pairStats.pairedReads) {
+      parsedGroup.warnings.push('no paired-end overlaps found; analyzed R1/R2 independently');
+      for (const filePath of rawPaths) mergeParsedGroup(parsedGroup, parseFastqText(readFastq(filePath), settings));
+    }
+    for (const filePath of singlePaths) mergeParsedGroup(parsedGroup, parseFastqText(readFastq(filePath), settings));
+  } else {
+    for (const filePath of rawPaths) mergeParsedGroup(parsedGroup, parseFastqText(readFastq(filePath), settings));
+  }
+  return finalizeParsed(parsedGroup);
+}
+
+function parsePairedFastqFiles(r1Paths, r2Paths, settings) {
+  const parsed = emptyParsedGroup();
+  const r1ById = new Map();
+  const pairScanLimit = Math.max(settings.readLimit * 2, settings.readLimit + 1000);
+  for (const filePath of r1Paths) {
+    const records = parseFastqRecords(readFastq(filePath), pairScanLimit);
+    parsed.estimatedRecords += records.estimatedRecords;
+    parsed.malformedRecords += records.malformedRecords;
+    parsed.readLimitReached = parsed.readLimitReached || records.readLimitReached;
+    records.records.forEach((record) => {
+      if (!r1ById.has(record.id)) r1ById.set(record.id, record);
+    });
+  }
+  let pairAttempts = 0;
+  for (const filePath of r2Paths) {
+    const records = parseFastqRecords(readFastq(filePath), pairScanLimit);
+    parsed.estimatedRecords += records.estimatedRecords;
+    parsed.malformedRecords += records.malformedRecords;
+    parsed.readLimitReached = parsed.readLimitReached || records.readLimitReached;
+    for (const r2 of records.records) {
+      if (parsed.pairStats.joinedPairs >= settings.readLimit) {
+        parsed.readLimitReached = true;
+        break;
+      }
+      const r1 = r1ById.get(r2.id);
+      if (!r1) {
+        parsed.pairStats.unpairedReads += 1;
+        continue;
+      }
+      pairAttempts += 1;
+      const joined = joinPairedReads(r1, r2);
+      if (!joined) {
+        parsed.pairStats.unjoinedPairs += 1;
+        continue;
+      }
+      parsed.pairStats.joinedPairs += 1;
+      addReadToParsed(parsed, joined.sequence, joined.quality, settings);
+    }
+  }
+  parsed.pairStats.pairedReads = pairAttempts;
+  if (parsed.pairStats.unjoinedPairs) parsed.warnings.push(`${parsed.pairStats.unjoinedPairs} paired-end read(s) did not meet overlap criteria`);
+  if (parsed.pairStats.unpairedReads) parsed.warnings.push(`${parsed.pairStats.unpairedReads} read(s) had no mate`);
+  return finalizeParsed(parsed);
+}
+
+function normalizeReadId(header) {
+  return String(header || '')
+    .replace(/^@/, '')
+    .split(/\s+/)[0]
+    .replace(/\/[12]$/, '')
+    .replace(/[_\-.]R[12]$/, '');
+}
+
+function joinPairedReads(r1, r2) {
+  const r2Seq = reverseComplement(r2.sequence);
+  const r2Qual = String(r2.quality || '').split('').reverse().join('');
+  return mergeOverlappingReads(r1.sequence, r1.quality, r2Seq, r2Qual);
+}
+
+function mergeOverlappingReads(seq1, qual1, seq2, qual2) {
+  const minOverlap = Math.min(12, seq1.length, seq2.length);
+  let best = null;
+  for (let offset = 0; offset <= seq1.length - minOverlap; offset += 1) {
+    const start = Math.max(0, offset);
+    const end = Math.min(seq1.length, offset + seq2.length);
+    const overlap = end - start;
+    if (overlap < minOverlap) continue;
+    let matches = 0;
+    let mismatches = 0;
+    let compared = 0;
+    for (let pos = start; pos < end; pos += 1) {
+      const a = seq1[pos];
+      const b = seq2[pos - offset];
+      if (a === 'N' || b === 'N') continue;
+      compared += 1;
+      if (a === b) matches += 1;
+      else mismatches += 1;
+    }
+    const identity = compared ? matches / compared : 0;
+    const score = matches * 2 - mismatches * 5 + overlap * 0.03;
+    if (identity >= 0.92 && (!best || score > best.score)) best = { offset, score, identity, overlap, mismatches };
+  }
+  if (!best) return null;
+  return buildConsensus(seq1, qual1, seq2, qual2, best.offset);
+}
+
+function buildConsensus(seq1, qual1, seq2, qual2, offset) {
+  const start = Math.min(0, offset);
+  const end = Math.max(seq1.length, offset + seq2.length);
+  let sequence = '';
+  let quality = '';
+  for (let pos = start; pos < end; pos += 1) {
+    const i1 = pos;
+    const i2 = pos - offset;
+    const has1 = i1 >= 0 && i1 < seq1.length;
+    const has2 = i2 >= 0 && i2 < seq2.length;
+    if (has1 && has2) {
+      const b1 = seq1[i1];
+      const b2 = seq2[i2];
+      const q1 = qScore(qual1[i1]);
+      const q2 = qScore(qual2[i2]);
+      if (b1 === b2) {
+        sequence += b1;
+        quality += qChar(Math.max(q1, q2));
+      } else if (b1 === 'N') {
+        sequence += b2;
+        quality += qChar(q2);
+      } else if (b2 === 'N') {
+        sequence += b1;
+        quality += qChar(q1);
+      } else if (q2 >= q1) {
+        sequence += b2;
+        quality += qChar(q2);
+      } else {
+        sequence += b1;
+        quality += qChar(q1);
+      }
+    } else if (has1) {
+      sequence += seq1[i1];
+      quality += qual1[i1] || '!';
+    } else if (has2) {
+      sequence += seq2[i2];
+      quality += qual2[i2] || '!';
+    }
+  }
+  return { sequence, quality };
+}
+
+function qScore(char) {
+  return Math.max(0, String(char || '!').charCodeAt(0) - 33);
+}
+
+function qChar(score) {
+  return String.fromCharCode(Math.max(0, Math.min(93, Math.round(score))) + 33);
 }
 
 function meanQuality(qual) {
@@ -851,6 +1047,7 @@ function analyzeSample(group, parsedGroup, reference, settings) {
 
   const maxPercent = Math.max(0, ...rows.map((row) => row.percent));
   const warnings = [];
+  (parsedGroup.warnings || []).forEach((warning) => warnings.push(warning));
   if (parsedGroup.keptRecords < settings.minDepth) warnings.push('below minimum reads');
   if (parsedGroup.malformedRecords) warnings.push('malformed FASTQ records');
   if (parsedGroup.readLimitReached) warnings.push('read limit applied');
@@ -878,6 +1075,10 @@ function analyzeSample(group, parsedGroup, reference, settings) {
       droppedN: parsedGroup.droppedN,
       malformedRecords: parsedGroup.malformedRecords,
       readLimitReached: parsedGroup.readLimitReached,
+      pairedReads: parsedGroup.pairStats ? parsedGroup.pairStats.pairedReads : 0,
+      joinedPairs: parsedGroup.pairStats ? parsedGroup.pairStats.joinedPairs : 0,
+      unjoinedPairs: parsedGroup.pairStats ? parsedGroup.pairStats.unjoinedPairs : 0,
+      unpairedReads: parsedGroup.pairStats ? parsedGroup.pairStats.unpairedReads : 0,
       meanIdentity: identityWeight ? totalIdentity / identityWeight : 0
     },
     positionRows: rows,
@@ -1285,7 +1486,7 @@ function buildAlleleCsv(run) {
 }
 
 function buildQcCsv(run) {
-  const header = ['sample', 'label', 'files', 'estimated_records', 'parsed_records', 'passed_reads', 'aligned_reads', 'low_identity_reads', 'no_indel_reads', 'edited_reads', 'unique_reads', 'mean_quality', 'mean_identity', 'dropped_short', 'dropped_quality', 'dropped_n', 'malformed_records', 'read_limit_reached', 'warnings'];
+  const header = ['sample', 'label', 'files', 'estimated_records', 'parsed_records', 'passed_reads', 'aligned_reads', 'low_identity_reads', 'no_indel_reads', 'edited_reads', 'unique_reads', 'mean_quality', 'mean_identity', 'dropped_short', 'dropped_quality', 'dropped_n', 'malformed_records', 'paired_reads', 'joined_pairs', 'unjoined_pairs', 'unpaired_reads', 'read_limit_reached', 'warnings'];
   const rows = run.qcRows.map((row) => [
     row.sample,
     row.label,
@@ -1304,6 +1505,10 @@ function buildQcCsv(run) {
     row.droppedQuality,
     row.droppedN,
     row.malformedRecords,
+    row.pairedReads || 0,
+    row.joinedPairs || 0,
+    row.unjoinedPairs || 0,
+    row.unpairedReads || 0,
     row.readLimitReached,
     row.warnings
   ]);
@@ -1367,9 +1572,9 @@ function buildReport(run) {
     '',
     '## QC Summary',
     '',
-    '| sample | QC-passed reads | alignment-passed reads | low-identity excluded | unique reads | mean Q | mean identity | max edit % | warnings |',
-    '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |',
-    ...run.samples.map((sample) => `| ${sample.sample} | ${sample.qc.passedReads} | ${sample.qc.alignedReads} | ${sample.qc.lowIdentityReads} | ${sample.qc.uniqueReads} | ${formatNumber(sample.qc.meanQuality, 2)} | ${formatNumber(sample.qc.meanIdentity * 100, 2)}% | ${formatNumber(sample.maxPercent, 3)}% | ${sample.warnings.join('; ') || 'OK'} |`),
+    '| sample | QC-passed reads | alignment-passed reads | low-identity excluded | joined pairs | unjoined pairs | unique reads | mean Q | mean identity | max edit % | warnings |',
+    '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |',
+    ...run.samples.map((sample) => `| ${sample.sample} | ${sample.qc.passedReads} | ${sample.qc.alignedReads} | ${sample.qc.lowIdentityReads} | ${sample.qc.joinedPairs || 0} | ${sample.qc.unjoinedPairs || 0} | ${sample.qc.uniqueReads} | ${formatNumber(sample.qc.meanQuality, 2)} | ${formatNumber(sample.qc.meanIdentity * 100, 2)}% | ${formatNumber(sample.maxPercent, 3)}% | ${sample.warnings.join('; ') || 'OK'} |`),
     '',
     '## Target Window',
     '',
@@ -1386,7 +1591,7 @@ function buildReport(run) {
     '## Interpretation Notes',
     '',
     `- Expected edit model: ${expectedEdit ? `${expectedEdit.name || 'edit'} (${expectedEdit.from}>${expectedEdit.to})` : 'not specified'}.`,
-    '- Reads were QC-filtered, unique-read aggregated, aligned to the amplicon in both orientations, and summarized at 1-based amplicon coordinates.',
+    '- Raw R1/R2 FASTQ files were joined by high-confidence overlap consensus when possible, then reads were QC-filtered, unique-read aggregated, aligned to the amplicon in both orientations, and summarized at 1-based amplicon coordinates.',
     '- Edit percentages use position-level covered reads as the denominator; terminal no-coverage gaps are not counted as deletion edits.',
     '- This benchmark is intended as a reproducible validation fixture, not as a claim of equivalence to every CRISPResso2 output table.'
   ].join('\n') + '\n';

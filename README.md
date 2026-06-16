@@ -51,18 +51,18 @@ The file picker accepts individual files, and the folder picker accepts a direct
 
 The reference should be the full expected PCR amplicon sequence used for alignment, not only the edited bases. The targeting window is a smaller region inside that reference that is highlighted in the figure and used as the expected editing region.
 
-Paired-end files are grouped by sample name when filenames contain common `R1` / `R2` markers. Reads are aligned independently against the reference, and reverse-complement orientation is tested automatically. Current limitation: paired-end consensus merging is not performed.
+Paired-end files are grouped by sample name when filenames contain common `R1` / `R2` markers. If raw R1/R2 FASTQ files are supplied without joined FASTQ files, Amplicon Analyzer reverse-complements R2, finds a high-confidence overlap, and builds a consensus read before QC and alignment. Pairs that do not meet the overlap criteria are counted in QC as `unjoined_pairs`.
 
 For large numbered batches, use `First sample number` and `Last sample number` to process only matching inferred sample groups. Files without a number are skipped while this filter is active.
 
-For Illumina-style filenames such as `97_S97_L001_R1_001.fastq.gz`, the displayed sample is normalized to `97`. Joined files such as `97.fastqjoin` use the same sample name, so do not load joined and raw R1/R2 files for the same sample in one run unless you intentionally want to double count reads. The preflight panel warns when joined and raw files are mixed in the same sample group.
+For Illumina-style filenames such as `97_S97_L001_R1_001.fastq.gz`, the displayed sample is normalized to `97`. Joined files such as `97.fastqjoin` use the same sample name. If joined and raw R1/R2 files are mixed for the same sample, the joined files are used and raw files are skipped to avoid double counting.
 
 ## 96-Sample Batch Workflow
 
 Amplicon Analyzer is optimized for numbered 96-sample batches:
 
 1. Import the legacy setting CSV.
-2. Choose the `fastqjoin` folder or the raw FASTQ.GZ folder.
+2. Choose the `fastqjoin` folder or the raw FASTQ.GZ folder. Raw R1/R2 files are joined automatically when a high-confidence overlap is found.
 3. Set `First sample number` and `Last sample number` if needed.
 4. Confirm that preflight reports `96` selected sample groups.
 
@@ -146,7 +146,9 @@ edit percentage = selected signal reads at position / position-level covered rea
 
 Coordinates are 1-based amplicon positions. The heatmap uses a black grid for amplicon bases, red outlines and labels for target positions, and a reference sequence row below the figure. Terminal no-coverage gaps are not counted as deletion edits.
 
-Reads are first filtered by FASTQ quality and length, then aligned in both orientations. Only reads at or above the configured minimum alignment identity are used for allele tables, position-level coverage, and mutation percentages.
+Raw paired-end R1/R2 files are first converted to overlap-consensus reads when possible. Reads are then filtered by FASTQ quality and length, then aligned in both orientations. Only reads at or above the configured minimum alignment identity are used for allele tables, position-level coverage, and mutation percentages.
+
+The QC export includes `paired_reads`, `joined_pairs`, `unjoined_pairs`, and `unpaired_reads` so raw FASTQ-only runs can be audited against upstream join results.
 
 When an expected base edit is selected, Amplicon Analyzer also reports target-window expected-edit reads:
 
@@ -160,7 +162,17 @@ For example, with `C>T`, only target-window positions where the reference base i
 
 This is a static browser app, so large FASTQ files are limited by browser memory and CPU. Start with the built-in sample data or a read limit such as `50,000` reads per sample, then increase the limit after confirming the configuration.
 
-For production-scale primary analysis, use Amplicon Analyzer as a fast review/export layer and validate final calls against an established command-line workflow.
+For production-scale primary analysis, keep the QC exports with the run and validate final calls against an established command-line workflow when changing assay design, read length, trimming, or join assumptions.
+
+## Paired-End Validation
+
+The repository includes a synthetic paired-end truth test:
+
+```text
+node tools/validate-paired-end.mjs
+```
+
+This creates raw R1/R2 FASTQ files and a matching joined FASTQ fixture, runs both paths through the analyzer, and checks that joined read count, aligned read count, expected edit position, and edit percentage match.
 
 ## Public FASTQ Benchmark
 
@@ -235,6 +247,7 @@ The CLI benchmark runner also supports local batch configs with a setting CSV an
 |   `-- public/
 |       `-- crispresso2_base_editor/
 |-- tools/
-|   `-- amplicon-analyzer-benchmark.mjs
+|   |-- amplicon-analyzer-benchmark.mjs
+|   `-- validate-paired-end.mjs
 `-- README.md
 ```
