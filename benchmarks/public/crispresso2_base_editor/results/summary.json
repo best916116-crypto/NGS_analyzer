@@ -1,5 +1,5 @@
 {
-  "createdAt": "2026-06-15T10:13:03.766Z",
+  "createdAt": "2026-06-17T01:21:41.061Z",
   "runName": "CRISPResso2 EMX1 Base Editor Public FASTQ Benchmark",
   "dataset": {
     "name": "CRISPResso2 base-editor example",
@@ -47,7 +47,8 @@
         "from": "C",
         "to": "T"
       }
-    }
+    },
+    "spacerRegion": null
   },
   "summary": {
     "sampleCount": 1,
@@ -122,6 +123,10 @@
       "droppedN": 0,
       "malformedRecords": 0,
       "readLimitReached": false,
+      "pairedReads": 0,
+      "joinedPairs": 0,
+      "unjoinedPairs": 0,
+      "unpairedReads": 0,
       "meanIdentity": 0.9967775260085673,
       "files": "base_editor.fastq.gz",
       "warnings": "low-identity reads excluded"

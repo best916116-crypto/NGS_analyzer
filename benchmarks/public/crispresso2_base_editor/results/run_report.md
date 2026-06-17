@@ -1,6 +1,6 @@
 # CRISPResso2 EMX1 Base Editor Public FASTQ Benchmark
 
-- Created: 2026-06-15T10:13:03.766Z
+- Created: 2026-06-17T01:21:41.061Z
 - Dataset: CRISPResso2 base-editor example
 - Source: https://docs.crispresso.com/latest/core/examples.html
 - FASTQ: https://crispresso.com/static/demo/base_editor.fastq.gz
@@ -8,7 +8,7 @@
 - Samples: 1
 - QC-passed reads: 25000
 - Alignment-passed reads: 24976
-- Edit signal shown in heatmap: Substitution-only edit rate
+- Edit signal shown in heatmap: Base substitution (%)
 - Target source: Cas forward spacer match - PAM matched - spacer window 4-13
 - Target positions: 135, 136, 137, 138, 139, 140, 141, 142, 143, 144
 - Minimum alignment identity: 80.0%
@@ -16,9 +16,9 @@
 
 ## QC Summary
 
-| sample | QC-passed reads | alignment-passed reads | low-identity excluded | unique reads | mean Q | mean identity | max edit % | warnings |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| emx1_base_editor | 25000 | 24976 | 24 | 3915 | 37.29 | 99.68% | 27.709% | low-identity reads excluded |
+| sample | QC-passed reads | alignment-passed reads | low-identity excluded | joined pairs | unjoined pairs | unique reads | mean Q | mean identity | max edit % | warnings |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| emx1_base_editor | 25000 | 24976 | 24 | 0 | 0 | 3915 | 37.29 | 99.68% | 27.709% | low-identity reads excluded |
 
 ## Target Window
 
@@ -49,6 +49,6 @@
 ## Interpretation Notes
 
 - Expected edit model: cytosine base editing (C>T).
-- Reads were QC-filtered, unique-read aggregated, aligned to the amplicon in both orientations, and summarized at 1-based amplicon coordinates.
+- Raw R1/R2 FASTQ files were joined by high-confidence overlap consensus when possible, then reads were QC-filtered, unique-read aggregated, aligned to the amplicon in both orientations, and summarized at 1-based amplicon coordinates.
 - Edit percentages use position-level covered reads as the denominator; terminal no-coverage gaps are not counted as deletion edits.
 - This benchmark is intended as a reproducible validation fixture, not as a claim of equivalence to every CRISPResso2 output table.
