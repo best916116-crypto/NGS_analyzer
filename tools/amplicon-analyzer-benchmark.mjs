@@ -306,9 +306,15 @@ function hasAnyHeader(headerSet, aliases) {
 function getSettingCell(row, header, aliases) {
   for (const alias of aliases) {
     const idx = header.indexOf(normalizeSettingKey(alias));
-    if (idx !== -1) return String(row[idx] || '').trim();
+    if (idx !== -1) return unwrapSpreadsheetText(row[idx]);
   }
   return '';
+}
+
+function unwrapSpreadsheetText(value) {
+  const text = String(value == null ? '' : value).trim();
+  const match = text.match(/^=\s*"((?:[^"]|"")*)"\s*$/);
+  return match ? match[1].replace(/""/g, '"').trim() : text;
 }
 
 function normalizeAssayType(value) {
