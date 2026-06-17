@@ -798,9 +798,15 @@
             </div>
             <span class="badge info">single or multi-site</span>
           </div>
-          <div class="field">
-            <label for="runName">Run name</label>
-            <input id="runName" value="Amplicon analysis run">
+          <div class="inline-grid">
+            <div class="field">
+              <label for="runName">Run name</label>
+              <input id="runName" value="Amplicon analysis run">
+            </div>
+            <div class="field">
+              <label for="siteName">Site name</label>
+              <input id="siteName" value="Primary site" placeholder="e.g. ND1, Cox3.1">
+            </div>
           </div>
           <div class="field">
             <label for="referenceSeq">Reference amplicon sequence</label>
@@ -1075,6 +1081,7 @@
       const els = {
         referenceSeq: $('referenceSeq'),
         runName: $('runName'),
+        siteName: $('siteName'),
         assayType: $('assayType'),
         assayFields: $('assayFields'),
         siteManifest: $('siteManifest'),
@@ -1416,7 +1423,7 @@
         const targetPositions = Array.from(settings.targets).sort((a, b) => a - b);
         const hasSpacerAnnotation = !!settings.spacerRegion;
         const warnings = [];
-        let siteConfigs = [{ siteName: 'Primary site', reference, settings }];
+        let siteConfigs = [{ siteName: primarySiteName(), reference, settings }];
         if (reference.length < 20) warnings.push('Reference amplicon is shorter than 20 bp.');
         try {
           if (reference.length >= 20) siteConfigs = getSiteConfigs(reference);
@@ -1444,6 +1451,7 @@
         els.preflightBody.innerHTML = `
           <div class="preflight-grid">
             <div class="preflight-row"><span>Reference</span><strong>${formatInt(reference.length)} bp</strong></div>
+            <div class="preflight-row"><span>Primary site name</span><strong>${escapeHtml(primarySiteName())}</strong></div>
             <div class="preflight-row"><span>Sites</span><strong>${formatInt(siteConfigs.length)} site${siteConfigs.length === 1 ? '' : 's'}</strong></div>
             <div class="preflight-row"><span>Samples</span><strong>${escapeHtml(sampleText)}</strong></div>
             <div class="preflight-row"><span>Sample number filter</span><strong>${escapeHtml(sampleRange.active ? `${sampleRange.label} (${groups.length} selected, ${skippedGroups.length} skipped)` : 'all samples')}</strong></div>
@@ -1714,6 +1722,7 @@
         try {
           const parsed = parseSettingCsv(await file.text());
           els.runName.value = file.name.replace(/\.csv$/i, '').replace(/[_-]+setting$/i, '') || 'Amplicon analysis run';
+          if (parsed.format === 'modern' && parsed.site) els.siteName.value = parsed.site;
           els.referenceSeq.value = parsed.reference;
           els.assayType.value = parsed.assayType || 'custom';
           renderAssayFields();
@@ -2496,11 +2505,15 @@
         const primarySettings = getSettings(primaryReference);
         const primary = {
           siteId: 'primary',
-          siteName: 'Primary site',
+          siteName: primarySiteName(),
           reference: primaryReference,
           settings: primarySettings
         };
         return [primary, ...parseSiteManifest(els.siteManifest.value, primarySettings)];
+      }
+
+      function primarySiteName() {
+        return String(els.siteName?.value || '').trim() || 'Primary site';
       }
 
       function parseSiteManifest(value, baseSettings) {
@@ -2985,6 +2998,25 @@
           qcRows: sites.flatMap((site) => site.qcRows),
           sites
         };
+      }
+
+      function syncPrimarySiteNameToResults() {
+        const run = state.results;
+        if (!run || !run.sites || !run.sites.length) return false;
+        const site = run.sites.find((item) => item.siteId === 'primary') || run.sites[0];
+        const nextName = primarySiteName();
+        if (site.siteName === nextName) return false;
+        site.siteName = nextName;
+        site.mutationRows = site.samples.flatMap((sample) => sample.positionRows.map((row) => ({ ...row, site: site.siteName, siteId: site.siteId, sample: sample.sample, label: labelFor(sample.sample) })));
+        site.alleleRows = site.samples.flatMap((sample) => sample.alleles.map((row) => ({ ...row, site: site.siteName, siteId: site.siteId, label: labelFor(sample.sample) })));
+        site.qcRows = site.samples.map((sample) => ({ site: site.siteName, siteId: site.siteId, sample: sample.sample, label: labelFor(sample.sample), ...sample.qc, files: sample.files.join('; '), warnings: sample.warnings.join('; ') }));
+        run.reference = run.sites[0].reference;
+        run.settings = run.sites[0].settings;
+        run.samples = currentSite().samples;
+        run.mutationRows = run.sites.flatMap((item) => item.mutationRows);
+        run.alleleRows = run.sites.flatMap((item) => item.alleleRows);
+        run.qcRows = run.sites.flatMap((item) => item.qcRows);
+        return true;
       }
 
       function currentSite() {
@@ -3680,6 +3712,7 @@
 
       function buildAlleleReportSvg(site, sample) {
         const alleles = sample.alleles.slice(0, 10);
+        const rowCount = Math.max(1, alleles.length);
         const range = alleleReportRange(site);
         const ref = site.reference.slice(range.start - 1, range.end);
         const charW = 8.4;
@@ -3693,8 +3726,10 @@
         const barGap = 16;
         const barW = 150;
         const tableW = sampleW + alleleW + seqW + readW;
+        const bodyH = rowCount * rowH;
+        const tableH = 26 + bodyH;
         const width = Math.ceil(left + tableW + barGap + barW + 56);
-        const height = Math.ceil(top + 26 + Math.max(1, alleles.length) * rowH + 34);
+        const height = Math.ceil(top + tableH + 34);
         const maxPct = Math.max(20, Math.ceil(Math.max(0, ...alleles.map((row) => row.ratio * 100)) / 10) * 10);
         const barX = left + tableW + barGap;
         const rowTop = top + 26;
@@ -3705,20 +3740,20 @@
         svg += `<text x="${left + sampleW + alleleW + 8}" y="18" class="small">Ref.</text>`;
         svg += `<text x="${left + sampleW + alleleW + 46}" y="18" class="seq">${escapeHtml(ref)}</text>`;
         svg += `<text x="${left + sampleW + alleleW + 8}" y="34" class="title">${escapeHtml(site.siteName)}</text>`;
-        svg += `<rect x="${left}" y="${top}" width="${tableW}" height="${26 + alleles.length * rowH}" fill="none" stroke="#000" stroke-width="1.2"/>`;
+        svg += `<rect x="${left}" y="${top}" width="${tableW}" height="${tableH}" fill="none" stroke="#000" stroke-width="1.2"/>`;
         svg += `<line x1="${left}" y1="${top + 16}" x2="${left + tableW}" y2="${top + 16}" stroke="#000" stroke-width="1"/>`;
-        svg += `<line x1="${left + sampleW}" y1="${top}" x2="${left + sampleW}" y2="${top + 26 + alleles.length * rowH}" stroke="#000" stroke-width="1"/>`;
-        svg += `<line x1="${left + sampleW + alleleW}" y1="${top}" x2="${left + sampleW + alleleW}" y2="${top + 26 + alleles.length * rowH}" stroke="#000" stroke-width="1"/>`;
-        svg += `<line x1="${left + sampleW + alleleW + seqW}" y1="${top}" x2="${left + sampleW + alleleW + seqW}" y2="${top + 26 + alleles.length * rowH}" stroke="#000" stroke-width="1"/>`;
+        svg += `<line x1="${left + sampleW}" y1="${top}" x2="${left + sampleW}" y2="${top + tableH}" stroke="#000" stroke-width="1"/>`;
+        svg += `<line x1="${left + sampleW + alleleW}" y1="${top}" x2="${left + sampleW + alleleW}" y2="${top + tableH}" stroke="#000" stroke-width="1"/>`;
+        svg += `<line x1="${left + sampleW + alleleW + seqW}" y1="${top}" x2="${left + sampleW + alleleW + seqW}" y2="${top + tableH}" stroke="#000" stroke-width="1"/>`;
         svg += `<text x="${left + sampleW / 2}" y="${top + 12}" text-anchor="middle" class="head">Sample</text>`;
         svg += `<text x="${left + sampleW + alleleW + seqW + readW / 2}" y="${top + 12}" text-anchor="middle" class="head">Read (%)</text>`;
-        svg += `<text x="${left + sampleW / 2}" y="${rowTop + Math.max(alleles.length * rowH, rowH) / 2}" text-anchor="middle" dominant-baseline="middle" class="cell">${escapeHtml(clip(labelFor(sample.sample), 14))}</text>`;
+        svg += `<text x="${left + sampleW / 2}" y="${rowTop + bodyH / 2}" text-anchor="middle" dominant-baseline="middle" class="cell">${escapeHtml(clip(labelFor(sample.sample), 14))}</text>`;
         svg += alleleReportAxis(barX, top + 2, barW, maxPct);
         alleles.forEach((allele, idx) => {
           const y = rowTop + idx * rowH;
           const midY = y + 12;
           const pct = allele.ratio * 100;
-          svg += `<line x1="${left}" y1="${y}" x2="${left + tableW}" y2="${y}" stroke="#000" stroke-width=".6"/>`;
+          svg += `<line x1="${idx === 0 ? left : left + sampleW}" y1="${y}" x2="${left + tableW}" y2="${y}" stroke="#000" stroke-width=".6"/>`;
           svg += `<text x="${left + sampleW + 8}" y="${midY}" class="cell">Allele-${idx + 1}</text>`;
           svg += alleleSequenceTspans(allele.sequence, site.reference, range, left + sampleW + alleleW + 8, midY);
           svg += `<text x="${left + sampleW + alleleW + seqW + readW - 8}" y="${midY}" text-anchor="end" class="cell">${formatPct(pct, 2)}</text>`;
@@ -4326,7 +4361,9 @@
         state.overviewSort = { key: 'sample', direction: 'asc' };
         state.figureView = { scale: 1, fit: false, dragging: false, dragX: 0, dragY: 0, scrollLeft: 0, scrollTop: 0 };
         state.log = [];
+        els.runName.value = 'Amplicon analysis run';
         els.referenceSeq.value = DEMO_REF;
+        els.siteName.value = 'Primary site';
         els.targets.value = '16,19';
         els.siteManifest.value = '';
         els.minDepth.value = '100';
@@ -4362,6 +4399,8 @@
         state.sortByMax = false;
         state.overviewSort = { key: 'sample', direction: 'asc' };
         state.figureView = { scale: 1, fit: false, dragging: false, dragX: 0, dragY: 0, scrollLeft: 0, scrollTop: 0 };
+        els.runName.value = 'Amplicon analysis run';
+        els.siteName.value = 'Primary site';
         els.referenceSeq.value = DEMO_REF;
         els.targets.value = '16,19,35';
         els.siteManifest.value = '';
@@ -4401,6 +4440,7 @@
           state.overviewSort = { key: 'sample', direction: 'asc' };
           state.figureView = { scale: 1, fit: false, dragging: false, dragX: 0, dragY: 0, scrollLeft: 0, scrollTop: 0 };
           els.runName.value = PUBLIC_BENCHMARK.name;
+          els.siteName.value = 'EMX1';
           els.referenceSeq.value = PUBLIC_BENCHMARK.reference;
           els.targets.value = '135-144';
           els.siteManifest.value = '';
@@ -4447,6 +4487,7 @@
         }
         const text = JSON.stringify({
           runName: els.runName.value,
+          siteName: primarySiteName(),
           referenceLength: normalizeSeq(els.referenceSeq.value).length,
           assayType: settings.assayType,
           targetSource: settings.targetSource,
@@ -4640,6 +4681,15 @@
           renderPreflight();
           renderFigure();
           if (state.activeTab === 'overview') renderTab();
+        };
+        els.siteName.oninput = () => {
+          renderPreflight();
+          if (syncPrimarySiteNameToResults()) {
+            syncSiteSelect();
+            renderSummary();
+            renderFigure();
+            renderTab();
+          }
         };
         els.targets.oninput = () => {
           renderPreflight();

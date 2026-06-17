@@ -22,7 +22,7 @@ https://best916116-crypto.github.io/NGS_analyzer/
 ## Basic Use
 
 1. Open the app.
-2. Enter the full reference amplicon sequence.
+2. Enter the site name and full reference amplicon sequence.
 3. Select the assay type and exact target positions.
 4. Add FASTQ files or choose a folder.
 5. Adjust QC and alignment settings if needed.
@@ -36,6 +36,7 @@ https://best916116-crypto.github.io/NGS_analyzer/
 | `.fastq`, `.fq` | Plain FASTQ |
 | `.fastq.gz`, `.fq.gz` | Gzip-compressed FASTQ |
 | `.fastjoin`, `.fastqjoin`, `.fqjoin`, `.join`, `.txt` | Joined FASTQ-style text |
+| Site name | Label used in figures, reports, and site-specific filenames |
 | Reference amplicon | Full expected PCR amplicon sequence |
 | Setting CSV | Optional run configuration |
 
