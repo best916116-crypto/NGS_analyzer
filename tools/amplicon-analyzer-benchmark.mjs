@@ -1655,7 +1655,7 @@ function buildSvgFigure(run) {
     svg += `<rect class="spacer-outline" x="${x}" y="${sequenceBoxY}" width="${w}" height="${compact ? 18 : 21}" fill="none" stroke="#18a538" stroke-width="2.2" shape-rendering="crispEdges"><title>${escapeHtml(spacerRegion.label || 'Spacer')} ${spacerRegion.start}-${spacerRegion.end}</title></rect>`;
   }
 
-  svg += buildLegend(left, height - 44, run.settings.signalMode, !!spacerRegion);
+  svg += buildLegend(left, height - 64, run.settings.signalMode, !!spacerRegion);
   svg += '</svg>';
   return svg;
 }
