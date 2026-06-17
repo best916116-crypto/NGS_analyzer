@@ -781,7 +781,7 @@
 
   <div class="app">
     <nav class="workflow" aria-label="Analysis workflow">
-      <div class="step active" data-step="setup"><b>1</b><span><strong>Setup</strong>Reference and target window</span></div>
+      <div class="step active" data-step="setup"><b>1</b><span><strong>Setup</strong>Reference and target positions</span></div>
       <div class="step" data-step="files"><b>2</b><span><strong>Files</strong>Add FASTQ / FASTQ.GZ</span></div>
       <div class="step" data-step="process"><b>3</b><span><strong>Run</strong>QC, alignment, calling</span></div>
       <div class="step" data-step="results"><b>4</b><span><strong>Results</strong>Review QC and figures</span></div>
@@ -823,7 +823,7 @@
               <option value="cas">Cas / CRISPR</option>
               <option value="tale">TALE / TALEN</option>
             </select>
-            <p class="hint">The reference is the full expected PCR amplicon. The targeting window is the highlighted region within that reference.</p>
+            <p class="hint">The reference is the full expected PCR amplicon. Exact target bases are highlighted from the target-position field.</p>
           </div>
           <div id="assayFields"></div>
           <div class="inline-grid">
@@ -1238,15 +1238,15 @@
                 <input id="taleSpacer" value="${escapeHtml(value('taleSpacer', ''))}" placeholder="Optional spacer-only fallback">
               </div>
               <div class="field">
-                <label for="talePadding">Window padding</label>
+                <label for="talePadding">Spacer padding</label>
                 <input id="talePadding" type="number" min="0" step="1" value="${escapeHtml(value('talePadding', '0'))}">
               </div>
             </div>
-            <p class="hint">For TALEN assays, the spacer between left and right binding sites is used as the default targeting window. Spacer-only matching is a fallback.</p>
+            <p class="hint">For TALEN assays, the spacer is annotated as a targetable region. Exact target positions are taken only from the target-position field below.</p>
           `;
         } else {
           els.assayFields.innerHTML = `
-            <p class="hint">Custom mode uses the manual target positions below as the heatmap target window.</p>
+            <p class="hint">Custom mode uses the manual target positions below as exact heatmap targets.</p>
           `;
         }
       }
@@ -1414,6 +1414,7 @@
         const expectedCount = expectedSampleCount();
         const settings = getSettings(reference);
         const targetPositions = Array.from(settings.targets).sort((a, b) => a - b);
+        const hasSpacerAnnotation = !!settings.spacerRegion;
         const warnings = [];
         let siteConfigs = [{ siteName: 'Primary site', reference, settings }];
         if (reference.length < 20) warnings.push('Reference amplicon is shorter than 20 bp.');
@@ -1427,13 +1428,14 @@
         if (state.files.length && sampleRange.active && !sampleRange.warning && !groups.length) warnings.push('No sample groups match the sample number filter.');
         if (state.files.length && expectedCount && groups.length && groups.length !== expectedCount) warnings.push(`Expected ${expectedCount} sample groups, but ${groups.length} are selected.`);
         if (groups.some((group) => group.kinds && group.kinds.has('joined') && group.kinds.has('raw'))) warnings.push('Joined FASTQ and raw FASTQ files are mixed in at least one sample group; keep one input type to avoid double counting.');
-        if (!targetPositions.length) warnings.push('No target positions are currently defined.');
+        if (!targetPositions.length && !hasSpacerAnnotation) warnings.push('No target positions are currently defined.');
+        if (!targetPositions.length && hasSpacerAnnotation) warnings.push('No exact target positions are defined; the spacer region will be annotated only.');
         if (settings.targetWarning) warnings.push(settings.targetWarning);
         if (state.files.some((file) => /\.gz$/i.test(file.name)) && !('DecompressionStream' in window)) warnings.push('This browser cannot decompress FASTQ.GZ files.');
         warnings.push('Raw R1/R2 files are joined by high-confidence overlap consensus when possible; joined FASTQ files take precedence if both are present.');
         warnings.push('Adapter trimming is not performed; trim adapters upstream when needed.');
 
-        const statusReady = reference.length >= 20 && groups.length && targetPositions.length && !settings.targetWarning && !sampleRange.warning && !warnings.some((item) => item.startsWith('Site manifest'));
+        const statusReady = reference.length >= 20 && groups.length && (targetPositions.length || hasSpacerAnnotation) && !settings.targetWarning && !sampleRange.warning && !warnings.some((item) => item.startsWith('Site manifest'));
         els.preflightBadge.textContent = statusReady ? 'ready' : 'review';
         els.preflightBadge.className = `badge ${statusReady ? 'good' : 'warn'}`;
         const sampleText = groups.length
@@ -1786,7 +1788,8 @@
           targets: assay.targets,
           targetSource: assay.source,
           targetWarning: assay.warning,
-          assayDetails: assay.details
+          assayDetails: assay.details,
+          spacerRegion: assay.spacerRegion
         };
       }
 
@@ -1837,7 +1840,8 @@
           targets: manual,
           source: manual.size ? 'manual / fallback target positions' : 'no target positions',
           warning,
-          details: {}
+          details: {},
+          spacerRegion: null
         });
         const assayType = normalizeAssayType(assayValues.type) || 'custom';
 
@@ -1862,7 +1866,8 @@
             targets,
             source: `Cas ${match.orientation} spacer match - PAM ${pamPattern ? (match.pamMatched ? 'matched' : 'not confirmed') : 'not specified'} - spacer window ${windowText}`,
             warning: match.pamMatched ? '' : 'Cas mode: spacer was found, but the PAM pattern was not confirmed.',
-            details: { spacer, pamPattern, spacerWindow: windowText, orientation: match.orientation }
+            details: { spacer, pamPattern, spacerWindow: windowText, orientation: match.orientation, spacerStart: match.start, spacerEnd: match.end },
+            spacerRegion: null
           };
         }
 
@@ -1874,12 +1879,12 @@
           if (left && right) {
             const match = findTalePair(reference, left, right);
             if (match) {
-              const targets = positionsFromRange(match.start - padding, match.end + padding, reference.length);
               return {
-                targets,
+                targets: manual,
                 source: `TALE/TALEN binding sites matched - spacer ${match.spacerLength} bp${padding ? ` - padding ${padding} bp` : ''}`,
                 warning: '',
-                details: { left, right, spacerLength: match.spacerLength, padding }
+                details: { left, right, spacerLength: match.spacerLength, padding, spacerStart: match.start, spacerEnd: match.end },
+                spacerRegion: { start: match.start, end: match.end, label: 'Spacer' }
               };
             }
             return fallback('TALE/TALEN mode: left/right binding sites were not found in the reference, so manual target positions are used.');
@@ -1887,12 +1892,12 @@
           if (spacer) {
             const match = findSequenceEitherStrand(reference, spacer);
             if (match) {
-              const targets = positionsFromRange(match.start, match.end, reference.length);
               return {
-                targets,
+                targets: manual,
                 source: `TALE spacer-only ${match.orientation} match`,
-                warning: 'TALE/TALEN mode: the window was inferred from spacer-only matching. Left/right binding sites are recommended when available.',
-                details: { spacer, orientation: match.orientation }
+                warning: 'TALE/TALEN mode: the spacer annotation was inferred from spacer-only matching. Left/right binding sites are recommended when available.',
+                details: { spacer, orientation: match.orientation, spacerStart: match.start, spacerEnd: match.end },
+                spacerRegion: { start: match.start, end: match.end, label: 'Spacer' }
               };
             }
             return fallback('TALE/TALEN mode: spacer sequence was not found in the reference, so manual target positions are used.');
@@ -3068,6 +3073,7 @@
         if (!run || !site || !site.samples.length || !site.reference.length) return '';
         const settings = site.settings;
         const targets = settings.targets;
+        const spacerRegion = normalizeRegion(settings.spacerRegion, site.reference.length);
         const samples = site.samples.slice();
         if (state.sortByMax) samples.sort((a, b) => b.maxPercent - a.maxPercent);
 
@@ -3076,34 +3082,25 @@
         const compact = panels.length > 1 || samples.length > 26;
         const cellW = compact ? (cols.length > 90 ? 7 : cols.length > 62 ? 9 : 12) : (cols.length > 90 ? 10 : 15);
         const rowH = compact ? 15 : 20;
-        const left = compact ? 116 : 154;
-        const right = 72;
-        const top = 44;
-        const bottom = 94;
+        const left = compact ? 118 : 156;
+        const right = 78;
+        const top = 38;
+        const bottom = spacerRegion ? 86 : 68;
         const gap = compact ? 24 : 0;
-        const sequenceH = compact ? 16 : 20;
+        const sequenceH = compact ? 24 : 28;
         const panelW = left + cols.length * cellW + right;
         const maxRows = Math.max(...panels.map((panel) => panel.length));
         const width = Math.max(820, panels.length * panelW + (panels.length - 1) * gap);
         const height = top + maxRows * rowH + sequenceH + bottom;
-        const signalLabel = getSignalLabel(settings.signalMode);
+        const targetRanges = rangesFromPositions(targets);
 
         let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="Amplicon mutation heatmap">`;
         svg += '<rect width="100%" height="100%" fill="#ffffff"/>';
-        svg += '<style>.title{font:700 13px Arial,sans-serif;fill:#18212b}.axis{font:10px Arial,sans-serif;fill:#4c5b68}.row{font:11px Arial,sans-serif;fill:#18212b}.base{font:700 9px Arial,sans-serif;fill:#18212b}.tiny{font:9px Arial,sans-serif;fill:#687786}.warn{fill:#aa6b00}</style>';
-        svg += `<text x="14" y="20" class="title">${escapeHtml(`${state.results.runName} - ${site.siteName}`)}</text>`;
-        svg += `<text x="14" y="36" class="axis">${escapeHtml(signalLabel)} - generated ${escapeHtml(formatTimestamp(state.results.createdAt))}</text>`;
+        svg += '<style>.title{font:700 italic 24px Arial,sans-serif;fill:#000}.axis{font:700 12px Arial,sans-serif;fill:#000}.row{font:700 13px Arial,sans-serif;fill:#000}.base{font:700 12px Arial,sans-serif;fill:#000}.tiny{font:700 10px Arial,sans-serif;fill:#000}.legend{font:700 14px Arial,sans-serif;fill:#000}.spacer{font:700 11px Arial,sans-serif;fill:#168b2b}</style>';
+        svg += `<text x="${width / 2}" y="24" text-anchor="middle" class="title">${escapeHtml(site.siteName || state.results.runName)}</text>`;
 
         panels.forEach((panel, panelIndex) => {
           const ox = panelIndex * (panelW + gap);
-          cols.forEach((col, idx) => {
-            const showTick = col.position === 1 || col.position === cols.length || col.position % 10 === 0 || targets.has(col.position);
-            if (!showTick) return;
-            const x = ox + left + idx * cellW + cellW / 2;
-            const y = targets.has(col.position) ? 34 : 30;
-            svg += `<text x="${x}" y="${y}" text-anchor="middle" class="${targets.has(col.position) ? 'warn' : 'axis'}">${col.position}</text>`;
-          });
-
           panel.forEach((sample, rowIndex) => {
             const y = top + rowIndex * rowH;
             const label = labelFor(sample.sample);
@@ -3111,23 +3108,33 @@
             svg += `<text x="${ox + left - 8}" y="${y + rowH * .72}" text-anchor="end" class="row">${escapeHtml(clip(label, compact ? 18 : 27))}</text>`;
             sample.positionRows.forEach((row, colIndex) => {
               const x = ox + left + colIndex * cellW;
-              const target = targets.has(row.position);
               const fill = low ? '#e1e6ec' : heatColor(row.percent);
-              svg += `<rect x="${x}" y="${y}" width="${Math.max(3, cellW - 1)}" height="${rowH - 1}" fill="${fill}" stroke="${target ? '#b42318' : '#111827'}" stroke-width="${target ? 1.5 : .45}"><title>${escapeHtml(label)} position ${row.position}: ${formatPct(row.percent, 2)}%</title></rect>`;
+              svg += `<rect x="${x}" y="${y}" width="${cellW}" height="${rowH}" fill="${fill}" stroke="#000" stroke-width=".75" shape-rendering="crispEdges"><title>${escapeHtml(label)} position ${row.position}: ${formatPct(row.percent, 2)}%</title></rect>`;
             });
             svg += `<text x="${ox + left + cols.length * cellW + 8}" y="${y + rowH * .72}" class="axis">${formatPct(sample.maxPercent, 1)}%</text>`;
           });
 
-          const sequenceY = top + maxRows * rowH + (compact ? 13 : 16);
+          targetRanges.forEach((range) => {
+            const x = ox + left + (range.start - 1) * cellW;
+            const w = (range.end - range.start + 1) * cellW;
+            svg += `<rect class="target-outline" x="${x}" y="${top}" width="${w}" height="${panel.length * rowH}" fill="none" stroke="#e00000" stroke-width="2.1" shape-rendering="crispEdges"><title>Target position ${range.start === range.end ? range.start : `${range.start}-${range.end}`}</title></rect>`;
+          });
+
+          const sequenceY = top + maxRows * rowH + (compact ? 17 : 20);
+          const sequenceBoxY = sequenceY - (compact ? 13 : 15);
           svg += `<text x="${ox + left - 8}" y="${sequenceY}" text-anchor="end" class="axis">Reference</text>`;
           cols.forEach((col, idx) => {
             const x = ox + left + idx * cellW + cellW / 2;
-            const cls = targets.has(col.position) ? 'warn' : 'base';
-            if (cellW >= 7) svg += `<text x="${x}" y="${sequenceY}" text-anchor="middle" class="${cls}">${escapeHtml(col.refBase)}</text>`;
+            if (cellW >= 7) svg += `<text x="${x}" y="${sequenceY}" text-anchor="middle" class="base">${escapeHtml(col.refBase)}</text>`;
           });
+          if (spacerRegion) {
+            const x = ox + left + (spacerRegion.start - 1) * cellW;
+            const w = (spacerRegion.end - spacerRegion.start + 1) * cellW;
+            svg += `<rect class="spacer-outline" x="${x}" y="${sequenceBoxY}" width="${w}" height="${compact ? 18 : 21}" fill="none" stroke="#18a538" stroke-width="2.2" shape-rendering="crispEdges"><title>${escapeHtml(spacerRegion.label || 'Spacer')} ${spacerRegion.start}-${spacerRegion.end}</title></rect>`;
+          }
         });
 
-        svg += buildLegend(left, height - 42);
+        svg += buildLegend(left, height - 44, settings.signalMode, !!spacerRegion);
         svg += '</svg>';
         return svg;
       }
@@ -3209,28 +3216,68 @@
         return panels;
       }
 
-      function heatColor(percent) {
-        if (percent >= 50) return '#0f4c81';
-        if (percent >= 25) return '#3a8ac6';
-        if (percent >= 10) return '#8fc4ee';
-        if (percent >= 2) return '#d7e9fb';
-        return '#f8fbff';
+      function normalizeRegion(region, length) {
+        if (!region) return null;
+        const start = Math.max(1, Math.min(Number(region.start) || 0, Number(region.end) || 0));
+        const end = Math.min(length, Math.max(Number(region.start) || 0, Number(region.end) || 0));
+        if (!start || !end || end < start) return null;
+        return { start, end, label: region.label || 'Spacer' };
       }
 
-      function buildLegend(x, y) {
-        const values = [0, 2, 10, 25, 50];
-        let svg = `<g><text x="${x}" y="${y - 10}" class="axis">edit percentage</text>`;
-        values.forEach((value, idx) => {
-          svg += `<rect x="${x + idx * 50}" y="${y}" width="40" height="12" fill="${heatColor(value)}" stroke="#d8e1ea"/>`;
-          svg += `<text x="${x + idx * 50}" y="${y + 29}" class="tiny">${value}%</text>`;
+      function rangesFromPositions(positions) {
+        const values = Array.from(positions || []).sort((a, b) => a - b);
+        const ranges = [];
+        if (!values.length) return ranges;
+        let start = values[0];
+        let end = values[0];
+        for (let i = 1; i <= values.length; i += 1) {
+          const value = values[i];
+          if (value === end + 1) {
+            end = value;
+            continue;
+          }
+          ranges.push({ start, end });
+          start = value;
+          end = value;
+        }
+        return ranges;
+      }
+
+      function heatColor(percent) {
+        if (percent >= 50) return '#0046d8';
+        if (percent >= 25) return '#0575e6';
+        if (percent >= 10) return '#53aef5';
+        if (percent >= 2) return '#d6ebff';
+        return '#ffffff';
+      }
+
+      function buildLegend(x, y, signalMode, showSpacer) {
+        const gradientId = `heatGradient${Math.floor(x)}${Math.floor(y)}`;
+        const legendW = 260;
+        let svg = `<defs><linearGradient id="${gradientId}" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#ffffff"/><stop offset="42%" stop-color="#53aef5"/><stop offset="70%" stop-color="#0575e6"/><stop offset="100%" stop-color="#0046d8"/></linearGradient></defs>`;
+        svg += `<g><rect x="${x}" y="${y}" width="${legendW}" height="12" fill="url(#${gradientId})" stroke="#000" stroke-width=".8"/>`;
+        [0, 10, 25, 50].forEach((value) => {
+          const tx = x + (value / 50) * legendW;
+          svg += `<text x="${tx}" y="${y + 30}" text-anchor="middle" class="tiny">${value}</text>`;
         });
-        svg += '<text x="14" y="' + (y + 29) + '" class="tiny">Black grid: amplicon bases - red outline/text: target position - gray row: below minimum reads</text>';
+        svg += `<text x="${x + legendW / 2}" y="${y + 52}" text-anchor="middle" class="legend">${escapeHtml(getFigureLegendLabel(signalMode))}</text>`;
+        if (showSpacer) {
+          const lx = x + legendW + 42;
+          svg += `<rect class="spacer-legend" x="${lx}" y="${y - 1}" width="34" height="14" fill="none" stroke="#18a538" stroke-width="2"/>`;
+          svg += `<text x="${lx + 42}" y="${y + 11}" class="spacer">Spacer</text>`;
+        }
         svg += '</g>';
         return svg;
       }
 
+      function getFigureLegendLabel(mode) {
+        if (mode === 'substitution') return 'Base substitution (%)';
+        if (mode === 'indel') return 'Indel (%)';
+        return 'Edit (%)';
+      }
+
       function getSignalLabel(mode) {
-        if (mode === 'substitution') return 'Substitution-only edit rate';
+        if (mode === 'substitution') return 'Base substitution (%)';
         if (mode === 'indel') return 'Indel-only edit rate';
         return 'Substitution + indel edit rate';
       }
@@ -3469,9 +3516,15 @@
           </tr>
         `).join('') : '';
         els.tabBody.innerHTML = `
-          <div class="field" style="max-width:360px;margin-top:0">
-            <label for="alleleSampleSelect">Sample</label>
-            <select id="alleleSampleSelect">${options}</select>
+          <div class="inline-grid" style="align-items:end">
+            <div class="field" style="margin-top:0">
+              <label for="alleleSampleSelect">Sample</label>
+              <select id="alleleSampleSelect">${options}</select>
+            </div>
+            <div class="btns" style="margin-bottom:14px">
+              <button class="btn green" id="alleleReportSampleBtn" type="button">Sample report SVG</button>
+              <button class="btn" id="alleleCsvSampleBtn" type="button">Sample CSV</button>
+            </div>
           </div>
           <div class="table-scroll">
             <table>
@@ -3487,6 +3540,10 @@
             renderAlleleTab();
           };
         }
+        const reportButton = $('alleleReportSampleBtn');
+        if (reportButton) reportButton.onclick = exportSelectedAlleleReport;
+        const csvButton = $('alleleCsvSampleBtn');
+        if (csvButton) csvButton.onclick = exportSelectedAlleleCsv;
       }
 
       function renderSamplesTab() {
@@ -3582,6 +3639,154 @@
           row.hasIndel
         ]);
         return toCsv(header, rows);
+      }
+
+      function currentAlleleSample() {
+        const site = currentSite();
+        if (!site) return null;
+        return site.samples.find((sample) => sample.sample === state.selectedSample) || site.samples[0] || null;
+      }
+
+      function exportSelectedAlleleCsv() {
+        const site = currentSite();
+        const sample = currentAlleleSample();
+        if (!site || !sample) return;
+        const header = ['site', 'sample', 'label', 'sequence', 'n_reads', 'ratio', 'orientation', 'identity', 'edit_signature', 'mismatch_count', 'insertion_count', 'deletion_count', 'has_indel'];
+        const rows = sample.alleles.map((row) => [
+          site.siteName,
+          sample.sample,
+          labelFor(sample.sample),
+          row.sequence,
+          row.nReads,
+          row.ratio,
+          row.orientation,
+          row.identity,
+          row.editSignature,
+          row.mismatchCount,
+          row.insertionCount,
+          row.deletionCount,
+          row.hasIndel
+        ]);
+        download(`allele_spectrum_${safeFileName(site.siteName)}_${safeFileName(labelFor(sample.sample))}.csv`, toCsv(header, rows), 'text/csv;charset=utf-8');
+      }
+
+      function exportSelectedAlleleReport() {
+        const site = currentSite();
+        const sample = currentAlleleSample();
+        if (!site || !sample) return;
+        const svg = buildAlleleReportSvg(site, sample);
+        download(`allele_report_${safeFileName(site.siteName)}_${safeFileName(labelFor(sample.sample))}.svg`, svg, 'image/svg+xml;charset=utf-8');
+      }
+
+      function buildAlleleReportSvg(site, sample) {
+        const alleles = sample.alleles.slice(0, 10);
+        const range = alleleReportRange(site);
+        const ref = site.reference.slice(range.start - 1, range.end);
+        const charW = 8.4;
+        const rowH = 18;
+        const top = 52;
+        const left = 38;
+        const sampleW = 82;
+        const alleleW = 68;
+        const seqW = Math.max(180, ref.length * charW + 18);
+        const readW = 62;
+        const barGap = 16;
+        const barW = 150;
+        const tableW = sampleW + alleleW + seqW + readW;
+        const width = Math.ceil(left + tableW + barGap + barW + 56);
+        const height = Math.ceil(top + 26 + Math.max(1, alleles.length) * rowH + 34);
+        const maxPct = Math.max(20, Math.ceil(Math.max(0, ...alleles.map((row) => row.ratio * 100)) / 10) * 10);
+        const barX = left + tableW + barGap;
+        const rowTop = top + 26;
+        let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="Allele spectrum report">`;
+        svg += '<rect width="100%" height="100%" fill="#fff"/>';
+        svg += '<style>.head{font:700 11px Arial,sans-serif;fill:#000}.cell{font:700 10px Arial,sans-serif;fill:#000}.seq{font:700 10px Courier New,monospace;fill:#000}.mut{font:700 10px Courier New,monospace;fill:#d60000}.small{font:700 9px Arial,sans-serif;fill:#000}.title{font:700 italic 13px Arial,sans-serif;fill:#000}</style>';
+        svg += `<text x="${left + 14}" y="18" class="small">Sample</text>`;
+        svg += `<text x="${left + sampleW + alleleW + 8}" y="18" class="small">Ref.</text>`;
+        svg += `<text x="${left + sampleW + alleleW + 46}" y="18" class="seq">${escapeHtml(ref)}</text>`;
+        svg += `<text x="${left + sampleW + alleleW + 8}" y="34" class="title">${escapeHtml(site.siteName)}</text>`;
+        svg += `<rect x="${left}" y="${top}" width="${tableW}" height="${26 + alleles.length * rowH}" fill="none" stroke="#000" stroke-width="1.2"/>`;
+        svg += `<line x1="${left}" y1="${top + 16}" x2="${left + tableW}" y2="${top + 16}" stroke="#000" stroke-width="1"/>`;
+        svg += `<line x1="${left + sampleW}" y1="${top}" x2="${left + sampleW}" y2="${top + 26 + alleles.length * rowH}" stroke="#000" stroke-width="1"/>`;
+        svg += `<line x1="${left + sampleW + alleleW}" y1="${top}" x2="${left + sampleW + alleleW}" y2="${top + 26 + alleles.length * rowH}" stroke="#000" stroke-width="1"/>`;
+        svg += `<line x1="${left + sampleW + alleleW + seqW}" y1="${top}" x2="${left + sampleW + alleleW + seqW}" y2="${top + 26 + alleles.length * rowH}" stroke="#000" stroke-width="1"/>`;
+        svg += `<text x="${left + sampleW / 2}" y="${top + 12}" text-anchor="middle" class="head">Sample</text>`;
+        svg += `<text x="${left + sampleW + alleleW + seqW + readW / 2}" y="${top + 12}" text-anchor="middle" class="head">Read (%)</text>`;
+        svg += `<text x="${left + sampleW / 2}" y="${rowTop + Math.max(alleles.length * rowH, rowH) / 2}" text-anchor="middle" dominant-baseline="middle" class="cell">${escapeHtml(clip(labelFor(sample.sample), 14))}</text>`;
+        svg += alleleReportAxis(barX, top + 2, barW, maxPct);
+        alleles.forEach((allele, idx) => {
+          const y = rowTop + idx * rowH;
+          const midY = y + 12;
+          const pct = allele.ratio * 100;
+          svg += `<line x1="${left}" y1="${y}" x2="${left + tableW}" y2="${y}" stroke="#000" stroke-width=".6"/>`;
+          svg += `<text x="${left + sampleW + 8}" y="${midY}" class="cell">Allele-${idx + 1}</text>`;
+          svg += alleleSequenceTspans(allele.sequence, site.reference, range, left + sampleW + alleleW + 8, midY);
+          svg += `<text x="${left + sampleW + alleleW + seqW + readW - 8}" y="${midY}" text-anchor="end" class="cell">${formatPct(pct, 2)}</text>`;
+          const barColor = alleleHasHighlightedEdit(allele.sequence, site, range) ? '#d60000' : '#000';
+          svg += `<rect x="${barX}" y="${y + 4}" width="${Math.max(1, (pct / maxPct) * barW)}" height="9" fill="${barColor}"/>`;
+        });
+        svg += '</svg>';
+        return svg;
+      }
+
+      function alleleReportAxis(x, y, width, maxPct) {
+        let svg = `<text x="${x + width / 2}" y="${y - 8}" text-anchor="middle" class="head">Read(%)</text>`;
+        svg += `<line x1="${x}" y1="${y + 16}" x2="${x + width}" y2="${y + 16}" stroke="#000" stroke-width="1"/>`;
+        const step = maxPct <= 20 ? 5 : maxPct <= 50 ? 10 : 20;
+        for (let value = 0; value <= maxPct; value += step) {
+          const tx = x + (value / maxPct) * width;
+          svg += `<line x1="${tx}" y1="${y + 12}" x2="${tx}" y2="${y + 20}" stroke="#000" stroke-width="1"/>`;
+          svg += `<text x="${tx}" y="${y + 10}" text-anchor="middle" class="small">${value}</text>`;
+        }
+        return svg;
+      }
+
+      function alleleReportRange(site) {
+        const targets = Array.from(site.settings.targets || []).sort((a, b) => a - b);
+        const spacer = normalizeRegion(site.settings.spacerRegion, site.reference.length);
+        let start = 1;
+        let end = Math.min(site.reference.length, 36);
+        if (targets.length) {
+          start = Math.max(1, targets[0] - 8);
+          end = Math.min(site.reference.length, targets[targets.length - 1] + 8);
+        } else if (spacer) {
+          start = Math.max(1, spacer.start - 6);
+          end = Math.min(site.reference.length, spacer.end + 6);
+        }
+        if (end - start + 1 > 42) {
+          const center = Math.round((start + end) / 2);
+          start = Math.max(1, center - 20);
+          end = Math.min(site.reference.length, start + 41);
+          start = Math.max(1, end - 41);
+        }
+        return { start, end };
+      }
+
+      function alleleSequenceTspans(sequence, reference, range, x, y) {
+        const charW = 8.4;
+        let out = `<text x="${x}" y="${y}" class="seq">`;
+        for (let pos = range.start; pos <= range.end; pos += 1) {
+          const refBase = reference[pos - 1] || '';
+          const base = sequence[pos - 1] || '-';
+          const cls = base !== refBase ? 'mut' : 'seq';
+          out += `<tspan x="${x + (pos - range.start) * charW}" class="${cls}">${escapeHtml(base)}</tspan>`;
+        }
+        out += '</text>';
+        return out;
+      }
+
+      function alleleHasHighlightedEdit(sequence, site, range) {
+        const targets = site.settings.targets && site.settings.targets.size ? site.settings.targets : positionsFromRange(range.start, range.end, site.reference.length);
+        for (const pos of targets) {
+          const refBase = site.reference[pos - 1] || '';
+          const base = sequence[pos - 1] || '-';
+          if (base !== refBase) return true;
+        }
+        return false;
+      }
+
+      function safeFileName(value) {
+        return String(value || 'sample').trim().replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'sample';
       }
 
       function buildQcCsv() {
@@ -4317,7 +4522,7 @@
             '',
             '',
             'joined',
-            'TALE left/right binding sites infer the spacer between them as the target window.'
+            'TALE left/right binding sites annotate the spacer. Fill target_positions only for exact target bases.'
           ],
           [
             'custom_window_site',

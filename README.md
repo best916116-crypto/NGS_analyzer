@@ -13,17 +13,17 @@ https://best916116-crypto.github.io/NGS_analyzer/
 - FASTQ, FASTQ.GZ, and joined FASTQ text input
 - File or folder selection for numbered sample batches
 - Automatic R1/R2 sample grouping and overlap-consensus joining
-- Custom, Cas / CRISPR, and TALE / TALEN target-window setup
+- Custom, Cas / CRISPR, and TALE / TALEN target annotation
 - Optional multi-site analysis
 - Setting CSV import and template export
-- QC table, mutation table, allele spectrum, summary JSON, and heatmap export
+- QC table, mutation table, allele spectrum, selected-sample allele reports, summary JSON, and heatmap export
 - Zoomable heatmap with full-figure and visible-viewport PNG export
 
 ## Basic Use
 
 1. Open the app.
 2. Enter the full reference amplicon sequence.
-3. Select the assay type and target window.
+3. Select the assay type and exact target positions.
 4. Add FASTQ files or choose a folder.
 5. Adjust QC and alignment settings if needed.
 6. Run the analysis.
@@ -51,7 +51,7 @@ The app can export a setting template with one row per amplicon site:
 site_name,reference_amplicon_sequence,target_positions,assay_type,spacer_sequence,pam_sequence,spacer_window,tale_left_sequence,tale_right_sequence,tale_spacer_sequence,tale_padding,expected_edit,sample_start,sample_end,expected_sample_count,preferred_input,notes
 ```
 
-Blank fields are ignored. `assay_type` may be `custom`, `cas`, or `tale`. If `assay_type` is blank, the app infers the assay from filled spacer, PAM, and TALE binding-site fields.
+Blank fields are ignored. `assay_type` may be `custom`, `cas`, or `tale`. If `assay_type` is blank, the app infers the assay from filled spacer, PAM, and TALE binding-site fields. For TALE / TALEN rows, the matched spacer is annotated as a targetable region; exact target bases come from `target_positions`.
 
 ## Outputs
 
@@ -61,6 +61,8 @@ Blank fields are ignored. `assay_type` may be `custom`, `cas`, or `tale`. If `as
 | `target_window_table.csv` | Target-window subset of the mutation table |
 | `substitution_matrix.csv` | Substitution counts by reference and observed base |
 | `allele_spectrum_table.csv` | Unique allele sequences and edit signatures |
+| `allele_report_<site>_<sample>.svg` | Publication-style allele spectrum report for the selected sample |
+| `allele_spectrum_<site>_<sample>.csv` | Allele spectrum CSV for the selected sample |
 | `qc_read_counts.csv` | Read count, filtering, alignment, and paired-end join summary |
 | `amplicon_run_summary.json` | Run settings, site summaries, QC totals, and top edits |
 | `amplicon_mutation_heatmap.svg` | Editable vector heatmap |

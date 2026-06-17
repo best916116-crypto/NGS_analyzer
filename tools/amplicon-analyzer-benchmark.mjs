@@ -407,7 +407,8 @@ function deriveAssayTargets(reference, assay, manualTargets) {
     targets: manual,
     source: manual.size ? 'manual / fallback target positions' : 'no target positions',
     warning,
-    details: {}
+    details: {},
+    spacerRegion: null
   });
   const assayType = normalizeAssayType(assay.type) || 'custom';
 
@@ -440,7 +441,8 @@ function deriveAssayTargets(reference, assay, manualTargets) {
         spacerStart: match.start,
         spacerEnd: match.end,
         expectedEdit: assay.expectedEdit || null
-      }
+      },
+      spacerRegion: null
     };
   }
 
@@ -453,10 +455,11 @@ function deriveAssayTargets(reference, assay, manualTargets) {
       const match = findTalePair(reference, left, right);
       if (match) {
         return {
-          targets: positionsFromRange(match.start - padding, match.end + padding, reference.length),
+          targets: manual,
           source: `TALE/TALEN binding sites matched - spacer ${match.spacerLength} bp${padding ? ` - padding ${padding} bp` : ''}`,
           warning: '',
-          details: { left, right, spacerLength: match.spacerLength, padding, expectedEdit: assay.expectedEdit || null }
+          details: { left, right, spacerLength: match.spacerLength, padding, spacerStart: match.start, spacerEnd: match.end, expectedEdit: assay.expectedEdit || null },
+          spacerRegion: { start: match.start, end: match.end, label: 'Spacer' }
         };
       }
       return fallback('TALE/TALEN mode: left/right binding sites were not found in the reference.');
@@ -465,10 +468,11 @@ function deriveAssayTargets(reference, assay, manualTargets) {
       const match = findSequenceEitherStrand(reference, spacer);
       if (match) {
         return {
-          targets: positionsFromRange(match.start, match.end, reference.length),
+          targets: manual,
           source: `TALE spacer-only ${match.orientation} match`,
-          warning: 'TALE/TALEN mode: the window was inferred from spacer-only matching. Left/right binding sites are recommended when available.',
-          details: { spacer, orientation: match.orientation, expectedEdit: assay.expectedEdit || null }
+          warning: 'TALE/TALEN mode: the spacer annotation was inferred from spacer-only matching. Left/right binding sites are recommended when available.',
+          details: { spacer, orientation: match.orientation, spacerStart: match.start, spacerEnd: match.end, expectedEdit: assay.expectedEdit || null },
+          spacerRegion: { start: match.start, end: match.end, label: 'Spacer' }
         };
       }
       return fallback('TALE/TALEN mode: spacer sequence was not found in the reference.');
@@ -1351,7 +1355,8 @@ function buildRunResult(samples, reference, settings, assay, config, inputFile) 
       targetSource: assay.source,
       targetWarning: assay.warning,
       targetPositions: Array.from(assay.targets).sort((a, b) => a - b),
-      details: assay.details
+      details: assay.details,
+      spacerRegion: assay.spacerRegion
     },
     samples,
     mutationRows,
@@ -1385,8 +1390,8 @@ function buildSubstitutionMatrix(samples) {
 }
 
 function buildTargetRows(mutationRows, targets, expectedEdit) {
-  const positions = targets.size ? targets : new Set(mutationRows.map((row) => row.position));
-  return mutationRows.filter((row) => positions.has(row.position)).map((row) => {
+  if (!targets.size) return [];
+  return mutationRows.filter((row) => targets.has(row.position)).map((row) => {
     const expectedReads = expectedEdit?.from === row.refBase && BASES.includes(expectedEdit.to)
       ? row[expectedEdit.to]
       : 0;
@@ -1599,33 +1604,25 @@ function buildReport(run) {
 
 function buildSvgFigure(run) {
   const targets = new Set(run.assay.targetPositions);
+  const targetRanges = rangesFromPositions(targets);
+  const spacerRegion = normalizeRegion(run.assay.spacerRegion, run.reference.length);
   const cols = Array.from({ length: run.reference.length }, (_, idx) => ({ position: idx + 1, refBase: run.reference[idx] }));
   const samples = run.samples.slice();
   const compact = samples.length > 20;
   const cellW = compact ? (cols.length > 90 ? 7 : cols.length > 62 ? 9 : 12) : (cols.length > 90 ? 10 : 15);
   const rowH = compact ? 15 : 20;
-  const left = compact ? 116 : 154;
-  const right = 76;
-  const top = 48;
-  const bottom = 96;
-  const sequenceH = compact ? 16 : 20;
+  const left = compact ? 118 : 156;
+  const right = 78;
+  const top = 38;
+  const bottom = spacerRegion ? 86 : 68;
+  const sequenceH = compact ? 24 : 28;
   const width = Math.max(860, left + cols.length * cellW + right);
   const height = top + samples.length * rowH + sequenceH + bottom;
-  const signalLabel = getSignalLabel(run.settings.signalMode);
 
   let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="Amplicon mutation heatmap">`;
   svg += '<rect width="100%" height="100%" fill="#ffffff"/>';
-  svg += '<style>.title{font:700 13px Arial,sans-serif;fill:#18212b}.axis{font:10px Arial,sans-serif;fill:#4c5b68}.row{font:11px Arial,sans-serif;fill:#18212b}.base{font:700 9px Arial,sans-serif;fill:#18212b}.tiny{font:9px Arial,sans-serif;fill:#687786}.warn{fill:#b42318}</style>';
-  svg += `<text x="14" y="20" class="title">${escapeHtml(run.runName)}</text>`;
-  svg += `<text x="14" y="38" class="axis">${escapeHtml(signalLabel)} - generated ${escapeHtml(run.createdAt)}</text>`;
-
-  cols.forEach((col, idx) => {
-    const showTick = col.position === 1 || col.position === cols.length || col.position % 10 === 0 || targets.has(col.position);
-    if (!showTick) return;
-    const x = left + idx * cellW + cellW / 2;
-    const y = targets.has(col.position) ? 38 : 34;
-    svg += `<text x="${x}" y="${y}" text-anchor="middle" class="${targets.has(col.position) ? 'warn' : 'axis'}">${col.position}</text>`;
-  });
+  svg += '<style>.title{font:700 italic 24px Arial,sans-serif;fill:#000}.axis{font:700 12px Arial,sans-serif;fill:#000}.row{font:700 13px Arial,sans-serif;fill:#000}.base{font:700 12px Arial,sans-serif;fill:#000}.tiny{font:700 10px Arial,sans-serif;fill:#000}.legend{font:700 14px Arial,sans-serif;fill:#000}.spacer{font:700 11px Arial,sans-serif;fill:#168b2b}</style>';
+  svg += `<text x="${width / 2}" y="24" text-anchor="middle" class="title">${escapeHtml(run.runName)}</text>`;
 
   samples.forEach((sample, rowIndex) => {
     const y = top + rowIndex * rowH;
@@ -1633,48 +1630,98 @@ function buildSvgFigure(run) {
     svg += `<text x="${left - 8}" y="${y + rowH * 0.72}" text-anchor="end" class="row">${escapeHtml(clip(sample.sample, compact ? 18 : 27))}</text>`;
     sample.positionRows.forEach((row, colIndex) => {
       const x = left + colIndex * cellW;
-      const target = targets.has(row.position);
       const fill = low ? '#e1e6ec' : heatColor(row.percent);
-      svg += `<rect x="${x}" y="${y}" width="${Math.max(3, cellW - 1)}" height="${rowH - 1}" fill="${fill}" stroke="${target ? '#b42318' : '#111827'}" stroke-width="${target ? 1.5 : 0.45}"><title>${escapeHtml(sample.sample)} position ${row.position}: ${formatNumber(row.percent, 2)}%</title></rect>`;
+      svg += `<rect x="${x}" y="${y}" width="${cellW}" height="${rowH}" fill="${fill}" stroke="#000" stroke-width=".75" shape-rendering="crispEdges"><title>${escapeHtml(sample.sample)} position ${row.position}: ${formatNumber(row.percent, 2)}%</title></rect>`;
     });
     svg += `<text x="${left + cols.length * cellW + 8}" y="${y + rowH * 0.72}" class="axis">${formatNumber(sample.maxPercent, 1)}%</text>`;
   });
 
-  const sequenceY = top + samples.length * rowH + (compact ? 13 : 16);
+  targetRanges.forEach((range) => {
+    const x = left + (range.start - 1) * cellW;
+    const w = (range.end - range.start + 1) * cellW;
+    svg += `<rect class="target-outline" x="${x}" y="${top}" width="${w}" height="${samples.length * rowH}" fill="none" stroke="#e00000" stroke-width="2.1" shape-rendering="crispEdges"><title>Target position ${range.start === range.end ? range.start : `${range.start}-${range.end}`}</title></rect>`;
+  });
+
+  const sequenceY = top + samples.length * rowH + (compact ? 17 : 20);
+  const sequenceBoxY = sequenceY - (compact ? 13 : 15);
   svg += `<text x="${left - 8}" y="${sequenceY}" text-anchor="end" class="axis">Reference</text>`;
   cols.forEach((col, idx) => {
     const x = left + idx * cellW + cellW / 2;
-    const cls = targets.has(col.position) ? 'warn' : 'base';
-    if (cellW >= 7) svg += `<text x="${x}" y="${sequenceY}" text-anchor="middle" class="${cls}">${escapeHtml(col.refBase)}</text>`;
+    if (cellW >= 7) svg += `<text x="${x}" y="${sequenceY}" text-anchor="middle" class="base">${escapeHtml(col.refBase)}</text>`;
   });
+  if (spacerRegion) {
+    const x = left + (spacerRegion.start - 1) * cellW;
+    const w = (spacerRegion.end - spacerRegion.start + 1) * cellW;
+    svg += `<rect class="spacer-outline" x="${x}" y="${sequenceBoxY}" width="${w}" height="${compact ? 18 : 21}" fill="none" stroke="#18a538" stroke-width="2.2" shape-rendering="crispEdges"><title>${escapeHtml(spacerRegion.label || 'Spacer')} ${spacerRegion.start}-${spacerRegion.end}</title></rect>`;
+  }
 
-  svg += buildLegend(left, height - 42);
+  svg += buildLegend(left, height - 44, run.settings.signalMode, !!spacerRegion);
   svg += '</svg>';
   return svg;
 }
 
 function heatColor(percent) {
-  if (percent >= 50) return '#0f4c81';
-  if (percent >= 25) return '#3a8ac6';
-  if (percent >= 10) return '#8fc4ee';
-  if (percent >= 2) return '#d7e9fb';
-  return '#f8fbff';
+  if (percent >= 50) return '#0046d8';
+  if (percent >= 25) return '#0575e6';
+  if (percent >= 10) return '#53aef5';
+  if (percent >= 2) return '#d6ebff';
+  return '#ffffff';
 }
 
-function buildLegend(x, y) {
-  const values = [0, 2, 10, 25, 50];
-  let svg = `<g><text x="${x}" y="${y - 10}" class="axis">edit percentage</text>`;
-  values.forEach((value, idx) => {
-    svg += `<rect x="${x + idx * 50}" y="${y}" width="40" height="12" fill="${heatColor(value)}" stroke="#d8e1ea"/>`;
-    svg += `<text x="${x + idx * 50}" y="${y + 29}" class="tiny">${value}%</text>`;
+function buildLegend(x, y, signalMode, showSpacer) {
+  const gradientId = `heatGradient${Math.floor(x)}${Math.floor(y)}`;
+  const legendW = 260;
+  let svg = `<defs><linearGradient id="${gradientId}" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#ffffff"/><stop offset="42%" stop-color="#53aef5"/><stop offset="70%" stop-color="#0575e6"/><stop offset="100%" stop-color="#0046d8"/></linearGradient></defs>`;
+  svg += `<g><rect x="${x}" y="${y}" width="${legendW}" height="12" fill="url(#${gradientId})" stroke="#000" stroke-width=".8"/>`;
+  [0, 10, 25, 50].forEach((value) => {
+    const tx = x + (value / 50) * legendW;
+    svg += `<text x="${tx}" y="${y + 30}" text-anchor="middle" class="tiny">${value}</text>`;
   });
-  svg += `<text x="14" y="${y + 29}" class="tiny">Black grid: amplicon bases; red outline/text: target position; gray row: below minimum reads</text>`;
+  svg += `<text x="${x + legendW / 2}" y="${y + 52}" text-anchor="middle" class="legend">${escapeHtml(getFigureLegendLabel(signalMode))}</text>`;
+  if (showSpacer) {
+    const lx = x + legendW + 42;
+    svg += `<rect class="spacer-legend" x="${lx}" y="${y - 1}" width="34" height="14" fill="none" stroke="#18a538" stroke-width="2"/>`;
+    svg += `<text x="${lx + 42}" y="${y + 11}" class="spacer">Spacer</text>`;
+  }
   svg += '</g>';
   return svg;
 }
 
+function normalizeRegion(region, length) {
+  if (!region) return null;
+  const start = Math.max(1, Math.min(Number(region.start) || 0, Number(region.end) || 0));
+  const end = Math.min(length, Math.max(Number(region.start) || 0, Number(region.end) || 0));
+  if (!start || !end || end < start) return null;
+  return { start, end, label: region.label || 'Spacer' };
+}
+
+function rangesFromPositions(positions) {
+  const values = Array.from(positions || []).sort((a, b) => a - b);
+  const ranges = [];
+  if (!values.length) return ranges;
+  let start = values[0];
+  let end = values[0];
+  for (let i = 1; i <= values.length; i += 1) {
+    const value = values[i];
+    if (value === end + 1) {
+      end = value;
+      continue;
+    }
+    ranges.push({ start, end });
+    start = value;
+    end = value;
+  }
+  return ranges;
+}
+
+function getFigureLegendLabel(mode) {
+  if (mode === 'substitution') return 'Base substitution (%)';
+  if (mode === 'indel') return 'Indel (%)';
+  return 'Edit (%)';
+}
+
 function getSignalLabel(mode) {
-  if (mode === 'substitution') return 'Substitution-only edit rate';
+  if (mode === 'substitution') return 'Base substitution (%)';
   if (mode === 'indel') return 'Indel-only edit rate';
   return 'Substitution + indel edit rate';
 }

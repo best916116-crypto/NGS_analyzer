@@ -117,7 +117,7 @@
       <ol>
         <li>Open the analyzer.</li>
         <li>Enter the full reference amplicon sequence.</li>
-        <li>Select Custom, Cas / CRISPR, or TALE / TALEN target setup.</li>
+        <li>Select Custom, Cas / CRISPR, or TALE / TALEN setup and exact target positions.</li>
         <li>Add FASTQ files or choose a folder.</li>
         <li>Review the preflight summary.</li>
         <li>Run the analysis.</li>
@@ -144,14 +144,14 @@
     <section class="panel">
       <h2>Target Setup</h2>
       <table>
-        <thead><tr><th>Mode</th><th>Target window</th></tr></thead>
+        <thead><tr><th>Mode</th><th>Target handling</th></tr></thead>
         <tbody>
           <tr><td>Custom</td><td>Uses the 1-based target positions entered in the app.</td></tr>
           <tr><td>Cas / CRISPR</td><td>Finds the spacer, checks the PAM pattern when available, and maps the spacer window to amplicon coordinates.</td></tr>
-          <tr><td>TALE / TALEN</td><td>Finds left and right TALE binding sites and uses the intervening spacer.</td></tr>
+          <tr><td>TALE / TALEN</td><td>Finds left and right TALE binding sites and annotates the intervening spacer as a targetable region.</td></tr>
         </tbody>
       </table>
-      <p class="note">The reference is the full alignment target. The targeting window is the highlighted region used for target-window summaries.</p>
+      <p class="note">The reference is the full alignment target. Exact target bases are taken from the target-position field. TALE / TALEN spacer annotations are shown separately from exact target bases.</p>
     </section>
 
     <section class="panel">
@@ -178,6 +178,8 @@ site_C, ACGTACGT..., 12,18,22</code></pre>
           <tr><td><code>target_window_table.csv</code></td><td>Target-window rows from the mutation table.</td></tr>
           <tr><td><code>substitution_matrix.csv</code></td><td>Reference-to-observed substitution counts.</td></tr>
           <tr><td><code>allele_spectrum_table.csv</code></td><td>Unique allele sequences and edit signatures.</td></tr>
+          <tr><td><code>allele_report_&lt;site&gt;_&lt;sample&gt;.svg</code></td><td>Publication-style allele spectrum report for the selected sample.</td></tr>
+          <tr><td><code>allele_spectrum_&lt;site&gt;_&lt;sample&gt;.csv</code></td><td>Allele spectrum CSV for the selected sample.</td></tr>
           <tr><td><code>qc_read_counts.csv</code></td><td>Filtering, alignment, and paired-end join summary.</td></tr>
           <tr><td><code>amplicon_run_summary.json</code></td><td>Run settings and top-level summaries.</td></tr>
           <tr><td><code>amplicon_mutation_heatmap.svg</code></td><td>Editable vector heatmap.</td></tr>
