@@ -980,6 +980,8 @@
             <button class="btn" id="targetCsvBtn" type="button">Target-window CSV</button>
             <button class="btn" id="conversionCsvBtn" type="button">Substitution matrix</button>
             <button class="btn" id="alleleCsvBtn" type="button">Allele-spectrum CSV</button>
+            <button class="btn" id="legacySummaryCsvBtn" type="button">summary.mutations.csv</button>
+            <button class="btn" id="legacyPerPosCsvBtn" type="button">summary.nonX_per_pos.mutations.csv</button>
             <button class="btn" id="qcCsvBtn" type="button">QC CSV</button>
             <button class="btn" id="summaryJsonBtn" type="button">Summary JSON</button>
             <button class="btn" id="reportBtn" type="button">Methods + QC report</button>
@@ -2569,6 +2571,7 @@
           position: idx + 1,
           refBase: reference[idx],
           substitutionReads: 0,
+          nonIndelSubstitutionReads: 0,
           deletionReads: 0,
           insertionReads: 0,
           editedReads: 0,
@@ -2583,6 +2586,10 @@
         let alignedReads = 0;
         let noIndelReads = 0;
         let editedReads = 0;
+        let noIndelSubstitutionEditedReads = 0;
+        let noIndelCMutationReads = 0;
+        let noIndelGMutationReads = 0;
+        let noIndelCgMutationReads = 0;
         let lowIdentityReads = 0;
         let totalIdentity = 0;
         let identityWeight = 0;
@@ -2611,11 +2618,18 @@
           }
 
           const editedPositions = new Set();
+          let hasSubstitutionEdit = false;
+          let hasCMutation = false;
+          let hasGMutation = false;
           for (const edit of edits.items) {
             const stat = stats[edit.position - 1];
             if (!stat) continue;
             if (edit.type === 'substitution') {
+              hasSubstitutionEdit = true;
+              if (stat.refBase === 'C') hasCMutation = true;
+              if (stat.refBase === 'G') hasGMutation = true;
               stat.substitutionReads += row.count;
+              if (!edits.hasIndel) stat.nonIndelSubstitutionReads += row.count;
               const base = BASES.includes(edit.alt) ? edit.alt : 'N';
               stat[base] += row.count;
             } else if (edit.type === 'deletion') {
@@ -2624,6 +2638,12 @@
               stat.insertionReads += row.count;
             }
             editedPositions.add(edit.position);
+          }
+          if (!edits.hasIndel) {
+            if (hasSubstitutionEdit) noIndelSubstitutionEditedReads += row.count;
+            if (hasCMutation) noIndelCMutationReads += row.count;
+            if (hasGMutation) noIndelGMutationReads += row.count;
+            if (hasCMutation || hasGMutation) noIndelCgMutationReads += row.count;
           }
           for (const position of editedPositions) {
             const stat = stats[position - 1];
@@ -2661,6 +2681,7 @@
             position: stat.position,
             refBase: stat.refBase,
             substitutionReads: stat.substitutionReads,
+            nonIndelSubstitutionReads: stat.nonIndelSubstitutionReads,
             deletionReads: stat.deletionReads,
             insertionReads: stat.insertionReads,
             editedReads: stat.editedReads,
@@ -2700,6 +2721,10 @@
             lowIdentityReads,
             noIndelReads,
             editedReads,
+            noIndelSubstitutionEditedReads,
+            noIndelCMutationReads,
+            noIndelGMutationReads,
+            noIndelCgMutationReads,
             uniqueReads: alleles.length,
             meanQuality: groupMeanQuality(parsedGroup),
             medianReadLength: median(parsedGroup.readLengths.filter(Boolean)),
@@ -3618,6 +3643,8 @@
               <button class="btn" data-export="target" type="button">Target-window CSV</button>
               <button class="btn" data-export="conversion" type="button">Substitution matrix</button>
               <button class="btn" data-export="allele" type="button">Allele-spectrum CSV</button>
+              <button class="btn" data-export="legacy-summary" type="button">summary.mutations.csv</button>
+              <button class="btn" data-export="legacy-per-pos" type="button">summary.nonX_per_pos.mutations.csv</button>
               <button class="btn" data-export="qc" type="button">QC CSV</button>
               <button class="btn" data-export="summary-json" type="button">Summary JSON</button>
             </div>
@@ -3657,6 +3684,98 @@
           row.N
         ]);
         return toCsv(header, rows);
+      }
+
+      function buildLegacyMutationSummaryCsv(run = state.results) {
+        const header = ['filename', 'C', 'G', 'any', 'n_aligned_noindel', 'n_aligned_total'];
+        const rows = [];
+        getRunSites(run).forEach((site) => {
+          site.samples.forEach((sample) => {
+            rows.push([
+              legacyRowName(site, sample, run),
+              legacyReadMetric(sample, 'noIndelCMutationReads', () => legacyReadMetric(sample, 'cMutationReads', () => fallbackReferenceMutationReads(sample, 'C'))),
+              legacyReadMetric(sample, 'noIndelGMutationReads', () => legacyReadMetric(sample, 'gMutationReads', () => fallbackReferenceMutationReads(sample, 'G'))),
+              legacyReadMetric(sample, 'noIndelCgMutationReads', () => legacyReadMetric(sample, 'cgMutationReads', () => legacyReadMetric(sample, 'noIndelSubstitutionEditedReads', () => sample.qc.editedReads || 0))),
+              sample.qc.noIndelReads || 0,
+              sample.qc.alignedReads || 0
+            ]);
+          });
+        });
+        return toCsv(header, rows);
+      }
+
+      function buildLegacyPerPositionMutationCsv(run = state.results) {
+        const sites = getRunSites(run);
+        const multiSite = sites.length > 1;
+        const positionLabels = [];
+        const seen = new Set();
+        sites.forEach((site) => {
+          for (let idx = 0; idx < site.reference.length; idx += 1) {
+            const label = `${site.reference[idx] || 'N'}${idx + 1}`;
+            if (!seen.has(label)) {
+              seen.add(label);
+              positionLabels.push(label);
+            }
+          }
+        });
+        const header = multiSite
+          ? ['site', 'nonX_per_pos', ...positionLabels, 'n_mut_any', 'n_aligned_noindel', 'n_aligned_total']
+          : ['nonX_per_pos', ...positionLabels, 'n_mut_any', 'n_aligned_noindel', 'n_aligned_total'];
+        const rows = [];
+        sites.forEach((site) => {
+          site.samples.forEach((sample) => {
+            const countsByLabel = new Map();
+            sample.positionRows.forEach((row) => {
+              countsByLabel.set(`${row.refBase}${row.position}`, legacyPositionMutationReads(row));
+            });
+            const row = [];
+            if (multiSite) row.push(site.siteName);
+            row.push(legacyRowName(site, sample, run));
+            positionLabels.forEach((label) => row.push(countsByLabel.has(label) ? countsByLabel.get(label) : ''));
+            row.push(legacyReadMetric(sample, 'noIndelSubstitutionEditedReads', () => legacyReadMetric(sample, 'substitutionEditedReads', () => sample.qc.editedReads || 0)));
+            row.push(sample.qc.noIndelReads || 0);
+            row.push(sample.qc.alignedReads || 0);
+            rows.push(row);
+          });
+        });
+        return toCsv(header, rows);
+      }
+
+      function getRunSites(run) {
+        if (!run) return [];
+        if (run.sites && run.sites.length) return run.sites;
+        return [run];
+      }
+
+      function legacyRowName(site, sample, run) {
+        const fileName = sample.files && sample.files.length ? sample.files[0] : sample.sample;
+        const sites = getRunSites(run);
+        return sites.length > 1 ? `${safeFileName(site.siteName)}__${fileName}` : fileName;
+      }
+
+      function legacyReadMetric(sample, key, fallback) {
+        const value = Number(sample.qc && sample.qc[key]);
+        if (Number.isFinite(value)) return value;
+        return fallback ? fallback() : 0;
+      }
+
+      function fallbackReferenceMutationReads(sample, refBase) {
+        return sample.positionRows
+          .filter((row) => row.refBase === refBase)
+          .reduce((sum, row) => sum + legacyPositionMutationReads(row), 0);
+      }
+
+      function legacyPositionMutationReads(row) {
+        const value = Number(row.nonIndelSubstitutionReads);
+        if (Number.isFinite(value)) return value;
+        return nonReferenceSubstitutionReads(row);
+      }
+
+      function nonReferenceSubstitutionReads(row) {
+        return BASES.reduce((sum, base) => {
+          if (base === row.refBase) return sum;
+          return sum + (Number(row[base]) || 0);
+        }, 0);
       }
 
       function buildAlleleCsv() {
@@ -3949,6 +4068,8 @@
             targetWindowTable: 'target_window_table.csv',
             substitutionMatrix: 'substitution_matrix.csv',
             alleleSpectrumTable: 'allele_spectrum_table.csv',
+            legacyMutationSummary: 'summary.mutations.csv',
+            legacyPerPositionSummary: 'summary.nonX_per_pos.mutations.csv',
             qcReadCounts: 'qc_read_counts.csv',
             figureSvg: 'amplicon_mutation_heatmap.svg',
             figurePng: 'amplicon_mutation_heatmap.png',
@@ -4313,6 +4434,8 @@
         else if (kind === 'target') download('target_window_table.csv', buildTargetCsv(), 'text/csv;charset=utf-8');
         else if (kind === 'conversion') download('substitution_matrix.csv', buildConversionCsv(), 'text/csv;charset=utf-8');
         else if (kind === 'allele') download('allele_spectrum_table.csv', buildAlleleCsv(), 'text/csv;charset=utf-8');
+        else if (kind === 'legacy-summary') download('summary.mutations.csv', buildLegacyMutationSummaryCsv(), 'text/csv;charset=utf-8');
+        else if (kind === 'legacy-per-pos') download('summary.nonX_per_pos.mutations.csv', buildLegacyPerPositionMutationCsv(), 'text/csv;charset=utf-8');
         else if (kind === 'qc') download('qc_read_counts.csv', buildQcCsv(), 'text/csv;charset=utf-8');
         else if (kind === 'summary-json') download('amplicon_run_summary.json', buildSummaryJson(), 'application/json;charset=utf-8');
         else if (kind === 'report') download('amplicon_run_report.md', buildReport(), 'text/markdown;charset=utf-8');
@@ -4642,6 +4765,8 @@
         $('targetCsvBtn').onclick = () => exportByKind('target');
         $('conversionCsvBtn').onclick = () => exportByKind('conversion');
         $('alleleCsvBtn').onclick = () => exportByKind('allele');
+        $('legacySummaryCsvBtn').onclick = () => exportByKind('legacy-summary');
+        $('legacyPerPosCsvBtn').onclick = () => exportByKind('legacy-per-pos');
         $('qcCsvBtn').onclick = () => exportByKind('qc');
         $('summaryJsonBtn').onclick = () => exportByKind('summary-json');
         $('reportBtn').onclick = () => exportByKind('report');

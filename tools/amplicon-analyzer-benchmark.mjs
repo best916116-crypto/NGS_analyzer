@@ -957,6 +957,7 @@ function analyzeSample(group, parsedGroup, reference, settings) {
     position: idx + 1,
     refBase: reference[idx],
     substitutionReads: 0,
+    nonIndelSubstitutionReads: 0,
     deletionReads: 0,
     insertionReads: 0,
     editedReads: 0,
@@ -971,6 +972,10 @@ function analyzeSample(group, parsedGroup, reference, settings) {
   let alignedReads = 0;
   let noIndelReads = 0;
   let editedReads = 0;
+  let noIndelSubstitutionEditedReads = 0;
+  let noIndelCMutationReads = 0;
+  let noIndelGMutationReads = 0;
+  let noIndelCgMutationReads = 0;
   let lowIdentityReads = 0;
   let totalIdentity = 0;
   let identityWeight = 0;
@@ -997,11 +1002,18 @@ function analyzeSample(group, parsedGroup, reference, settings) {
     }
 
     const editedPositions = new Set();
+    let hasSubstitutionEdit = false;
+    let hasCMutation = false;
+    let hasGMutation = false;
     for (const edit of edits.items) {
       const stat = stats[edit.position - 1];
       if (!stat) continue;
       if (edit.type === 'substitution') {
+        hasSubstitutionEdit = true;
+        if (stat.refBase === 'C') hasCMutation = true;
+        if (stat.refBase === 'G') hasGMutation = true;
         stat.substitutionReads += row.count;
+        if (!edits.hasIndel) stat.nonIndelSubstitutionReads += row.count;
         const base = BASES.includes(edit.alt) ? edit.alt : 'N';
         stat[base] += row.count;
       } else if (edit.type === 'deletion') {
@@ -1010,6 +1022,12 @@ function analyzeSample(group, parsedGroup, reference, settings) {
         stat.insertionReads += row.count;
       }
       editedPositions.add(edit.position);
+    }
+    if (!edits.hasIndel) {
+      if (hasSubstitutionEdit) noIndelSubstitutionEditedReads += row.count;
+      if (hasCMutation) noIndelCMutationReads += row.count;
+      if (hasGMutation) noIndelGMutationReads += row.count;
+      if (hasCMutation || hasGMutation) noIndelCgMutationReads += row.count;
     }
     for (const position of editedPositions) {
       const stat = stats[position - 1];
@@ -1040,6 +1058,7 @@ function analyzeSample(group, parsedGroup, reference, settings) {
       position: stat.position,
       refBase: stat.refBase,
       substitutionReads: stat.substitutionReads,
+      nonIndelSubstitutionReads: stat.nonIndelSubstitutionReads,
       deletionReads: stat.deletionReads,
       insertionReads: stat.insertionReads,
       editedReads: stat.editedReads,
@@ -1077,6 +1096,10 @@ function analyzeSample(group, parsedGroup, reference, settings) {
       lowIdentityReads,
       noIndelReads,
       editedReads,
+      noIndelSubstitutionEditedReads,
+      noIndelCMutationReads,
+      noIndelGMutationReads,
+      noIndelCgMutationReads,
       uniqueReads: alleles.length,
       meanQuality: parsedGroup.meanQuality,
       medianReadLength: parsedGroup.medianReadLength,
@@ -1433,11 +1456,18 @@ function writeOutputs(resultDir, run) {
   fs.writeFileSync(path.join(resultDir, 'qc_read_counts.csv'), buildQcCsv(run));
   fs.writeFileSync(path.join(resultDir, 'substitution_matrix.csv'), buildConversionCsv(run));
   fs.writeFileSync(path.join(resultDir, 'target_window_table.csv'), buildTargetCsv(run));
+  fs.writeFileSync(path.join(resultDir, 'summary.mutations.csv'), buildLegacyMutationSummaryCsv(run));
+  fs.writeFileSync(path.join(resultDir, 'summary.nonX_per_pos.mutations.csv'), buildLegacyPerPositionMutationCsv(run));
   fs.writeFileSync(path.join(resultDir, 'amplicon_mutation_heatmap.svg'), buildSvgFigure(run));
   fs.writeFileSync(path.join(resultDir, 'run_report.md'), buildReport(run));
 }
 
 function toSerializableRun(run) {
+  const summary = {
+    ...run.summary,
+    topPosition: run.summary.topPosition ? publicMutationRow(run.summary.topPosition) : null,
+    topTargetPosition: run.summary.topTargetPosition ? publicMutationRow(run.summary.topTargetPosition) : null
+  };
   return {
     createdAt: run.createdAt,
     runName: run.runName,
@@ -1446,13 +1476,18 @@ function toSerializableRun(run) {
     referenceLength: run.reference.length,
     settings: run.settings,
     assay: run.assay,
-    summary: run.summary,
+    summary,
     qcRows: run.qcRows,
-    topMutationRows: run.mutationRows.slice().sort((a, b) => b.percent - a.percent).slice(0, 20),
-    targetRows: run.targetRows,
+    topMutationRows: run.mutationRows.slice().sort((a, b) => b.percent - a.percent).slice(0, 20).map(publicMutationRow),
+    targetRows: run.targetRows.map(publicMutationRow),
     substitutionMatrix: run.conversionRows,
     topAlleles: run.alleleRows.slice(0, 20)
   };
+}
+
+function publicMutationRow(row) {
+  const { nonIndelSubstitutionReads, ...rest } = row;
+  return rest;
 }
 
 function buildMutationCsv(run) {
@@ -1475,6 +1510,68 @@ function buildMutationCsv(run) {
     row.N
   ]);
   return toCsv(header, rows);
+}
+
+function buildLegacyMutationSummaryCsv(run) {
+  const header = ['filename', 'C', 'G', 'any', 'n_aligned_noindel', 'n_aligned_total'];
+  const rows = run.samples.map((sample) => [
+    legacyRowName(sample),
+    legacyReadMetric(sample, 'noIndelCMutationReads', () => legacyReadMetric(sample, 'cMutationReads', () => fallbackReferenceMutationReads(sample, 'C'))),
+    legacyReadMetric(sample, 'noIndelGMutationReads', () => legacyReadMetric(sample, 'gMutationReads', () => fallbackReferenceMutationReads(sample, 'G'))),
+    legacyReadMetric(sample, 'noIndelCgMutationReads', () => legacyReadMetric(sample, 'cgMutationReads', () => legacyReadMetric(sample, 'noIndelSubstitutionEditedReads', () => sample.qc.editedReads || 0))),
+    sample.qc.noIndelReads || 0,
+    sample.qc.alignedReads || 0
+  ]);
+  return toCsv(header, rows);
+}
+
+function buildLegacyPerPositionMutationCsv(run) {
+  const positionLabels = run.reference.split('').map((base, idx) => `${base || 'N'}${idx + 1}`);
+  const header = ['nonX_per_pos', ...positionLabels, 'n_mut_any', 'n_aligned_noindel', 'n_aligned_total'];
+  const rows = run.samples.map((sample) => {
+    const countsByLabel = new Map();
+    for (const row of sample.positionRows) {
+      countsByLabel.set(`${row.refBase}${row.position}`, legacyPositionMutationReads(row));
+    }
+    return [
+      legacyRowName(sample),
+      ...positionLabels.map((label) => countsByLabel.get(label) || 0),
+      legacyReadMetric(sample, 'noIndelSubstitutionEditedReads', () => legacyReadMetric(sample, 'substitutionEditedReads', () => sample.qc.editedReads || 0)),
+      sample.qc.noIndelReads || 0,
+      sample.qc.alignedReads || 0
+    ];
+  });
+  return toCsv(header, rows);
+}
+
+function legacyRowName(sample) {
+  const fileName = sample.files && sample.files.length ? sample.files[0] : sample.sample;
+  return path.basename(String(fileName || sample.sample));
+}
+
+function legacyReadMetric(sample, key, fallback) {
+  const value = Number(sample.qc && sample.qc[key]);
+  if (Number.isFinite(value)) return value;
+  return fallback ? fallback() : 0;
+}
+
+function fallbackReferenceMutationReads(sample, refBase) {
+  return sample.positionRows
+    .filter((row) => row.refBase === refBase)
+    .reduce((sum, row) => sum + legacyPositionMutationReads(row), 0);
+}
+
+function legacyPositionMutationReads(row) {
+  const value = Number(row.nonIndelSubstitutionReads);
+  if (Number.isFinite(value)) return value;
+  return nonReferenceSubstitutionReads(row);
+}
+
+function nonReferenceSubstitutionReads(row) {
+  return BASES.reduce((sum, base) => {
+    if (base === row.refBase) return sum;
+    return sum + (Number(row[base]) || 0);
+  }, 0);
 }
 
 function buildAlleleCsv(run) {

@@ -64,6 +64,8 @@ Blank fields are ignored. `assay_type` may be `custom`, `cas`, or `tale`. If `as
 | `allele_spectrum_table.csv` | Unique allele sequences and edit signatures |
 | `allele_report_<site>_<sample>.svg` | Publication-style allele spectrum report for the selected sample |
 | `allele_spectrum_<site>_<sample>.csv` | Allele spectrum CSV for the selected sample |
+| `summary.mutations.csv` | Legacy-compatible C/G mutation outcome summary by sample |
+| `summary.nonX_per_pos.mutations.csv` | Legacy-compatible per-position non-reference mutation counts |
 | `qc_read_counts.csv` | Read count, filtering, alignment, and paired-end join summary |
 | `amplicon_run_summary.json` | Run settings, site summaries, QC totals, and top edits |
 | `amplicon_mutation_heatmap.svg` | Editable vector heatmap |
