@@ -1025,7 +1025,7 @@
                 <button class="btn" id="zoomResetBtn" type="button">100%</button>
                 <button class="btn green" id="visiblePngBtn" type="button">Visible PNG</button>
               </div>
-              <button class="btn" id="sortBtn" type="button">Sort by max edit</button>
+              <button class="btn" id="sortBtn" type="button">Sort by max per-base edit</button>
               <button class="btn" id="copySettingsBtn" type="button">Copy settings</button>
             </div>
           </div>
@@ -3421,20 +3421,20 @@
           ${siteRows ? `
           <div class="table-scroll" style="margin-bottom:12px">
             <table>
-              <thead><tr><th>site</th><th>reference</th><th>samples</th><th>QC-passed reads</th><th>alignment-passed reads</th><th>max edit</th><th>status</th></tr></thead>
+              <thead><tr><th>site</th><th>reference</th><th>samples</th><th>QC-passed reads</th><th>alignment-passed reads</th><th>max per-base edit</th><th>status</th></tr></thead>
               <tbody>${siteRows}</tbody>
             </table>
           </div>` : ''}
           ${expectedSummary ? `
           <div class="table-scroll" style="margin-bottom:12px">
             <table>
-              <thead><tr><th colspan="5">Expected edit summary (${escapeHtml(expectedSummary.label)})</th></tr><tr><th>sample</th><th>expected reads</th><th>covered target reads</th><th>target-window rate</th><th>top expected site</th></tr></thead>
+              <thead><tr><th colspan="5">Expected edit rate within current target positions (${escapeHtml(expectedSummary.label)})</th></tr><tr><th>sample</th><th>expected reads</th><th>covered target-position reads</th><th>current-target rate</th><th>top expected position</th></tr></thead>
               <tbody>${expectedRows}</tbody>
             </table>
           </div>` : ''}
           <div class="table-scroll">
             <table>
-              <thead><tr>${overviewTh('sample', 'sample')}${overviewTh('passedReads', 'QC-passed reads')}${overviewTh('alignedReads', 'alignment-passed reads')}${overviewTh('uniqueReads', 'unique reads')}${overviewTh('meanQuality', 'mean Q')}${overviewTh('meanIdentity', 'mean identity')}${overviewTh('maxPercent', 'max edit')}${overviewTh('warnings', 'status')}</tr></thead>
+              <thead><tr>${overviewTh('sample', 'sample')}${overviewTh('passedReads', 'QC-passed reads')}${overviewTh('alignedReads', 'alignment-passed reads')}${overviewTh('uniqueReads', 'unique allele sequences')}${overviewTh('meanQuality', 'mean Q')}${overviewTh('meanIdentity', 'mean identity')}${overviewTh('maxPercent', 'max per-base edit')}${overviewTh('warnings', 'status')}</tr></thead>
               <tbody>${rows}</tbody>
             </table>
           </div>
@@ -3950,7 +3950,7 @@
       }
 
       function buildQcCsv() {
-        const header = ['site', 'sample', 'label', 'files', 'estimated_records', 'parsed_records', 'passed_reads', 'aligned_reads', 'low_identity_reads', 'no_indel_reads', 'edited_reads', 'unique_reads', 'mean_quality', 'mean_identity', 'dropped_short', 'dropped_quality', 'dropped_n', 'malformed_records', 'paired_reads', 'joined_pairs', 'unjoined_pairs', 'unpaired_reads', 'read_limit_reached', 'warnings'];
+        const header = ['site', 'sample', 'label', 'files', 'estimated_records', 'parsed_records', 'passed_reads', 'aligned_reads', 'low_identity_reads', 'no_indel_reads', 'edited_reads', 'unique_allele_sequences', 'mean_quality', 'mean_identity', 'dropped_short', 'dropped_quality', 'dropped_n', 'malformed_records', 'paired_reads', 'joined_pairs', 'unjoined_pairs', 'unpaired_reads', 'read_limit_reached', 'warnings'];
         const rows = state.results.qcRows.map((row) => [
           row.site,
           row.sample,
@@ -4153,21 +4153,21 @@
           '',
           '## Site Summary',
           '',
-          '| site | reference bp | samples | QC-passed reads | alignment-passed reads | max edit % | target positions |',
+          '| site | reference bp | samples | QC-passed reads | alignment-passed reads | max per-base edit % | target positions |',
           '| --- | ---: | ---: | ---: | ---: | ---: | --- |',
           ...siteSummaryRows,
           '',
           ...(expectedSummaryRows.length ? [
             '## Expected Edit Summary',
             '',
-            '| site | sample | model | expected reads | covered target reads | target-window rate | top expected site |',
+            '| site | sample | model | expected reads | covered target-position reads | current-target rate | top expected position |',
             '| --- | --- | --- | ---: | ---: | ---: | --- |',
             ...expectedSummaryRows,
             ''
           ] : []),
           '## Sample Summary',
           '',
-          '| site | sample | label | QC-passed reads | alignment-passed reads | low-identity excluded | unique reads | mean Q | mean identity | max edit % | warnings |',
+          '| site | sample | label | QC-passed reads | alignment-passed reads | low-identity excluded | unique allele sequences | mean Q | mean identity | max per-base edit % | warnings |',
           '| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |',
           ...sampleRows,
           '',
@@ -4279,12 +4279,12 @@
     </section>
     <section>
       <h2>Site Summary</h2>
-      <table><thead><tr><th>site</th><th>reference</th><th>samples</th><th>QC-passed reads</th><th>alignment-passed reads</th><th>max edit</th><th>target positions</th></tr></thead><tbody>${siteSummaryRows}</tbody></table>
+      <table><thead><tr><th>site</th><th>reference</th><th>samples</th><th>QC-passed reads</th><th>alignment-passed reads</th><th>max per-base edit</th><th>target positions</th></tr></thead><tbody>${siteSummaryRows}</tbody></table>
     </section>
-    ${expectedSummaryRows ? `<section><h2>Expected Edit Summary</h2><table><thead><tr><th>site</th><th>sample</th><th>model</th><th>expected reads</th><th>covered target reads</th><th>target-window rate</th><th>top expected site</th></tr></thead><tbody>${expectedSummaryRows}</tbody></table></section>` : ''}
+    ${expectedSummaryRows ? `<section><h2>Expected Edit Rate Within Current Target Positions</h2><table><thead><tr><th>site</th><th>sample</th><th>model</th><th>expected reads</th><th>covered target-position reads</th><th>current-target rate</th><th>top expected position</th></tr></thead><tbody>${expectedSummaryRows}</tbody></table></section>` : ''}
     <section>
       <h2>Sample Summary</h2>
-      <table><thead><tr><th>site</th><th>sample</th><th>label</th><th>QC-passed reads</th><th>alignment-passed reads</th><th>low-identity excluded</th><th>unique reads</th><th>mean Q</th><th>mean identity</th><th>max edit</th><th>warnings</th></tr></thead><tbody>${sampleRows}</tbody></table>
+      <table><thead><tr><th>site</th><th>sample</th><th>label</th><th>QC-passed reads</th><th>alignment-passed reads</th><th>low-identity excluded</th><th>unique allele sequences</th><th>mean Q</th><th>mean identity</th><th>max per-base edit</th><th>warnings</th></tr></thead><tbody>${sampleRows}</tbody></table>
     </section>
     <section>
       <h2>Methods Notes</h2>

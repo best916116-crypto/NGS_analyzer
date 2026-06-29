@@ -1594,7 +1594,7 @@ function buildAlleleCsv(run) {
 }
 
 function buildQcCsv(run) {
-  const header = ['sample', 'label', 'files', 'estimated_records', 'parsed_records', 'passed_reads', 'aligned_reads', 'low_identity_reads', 'no_indel_reads', 'edited_reads', 'unique_reads', 'mean_quality', 'mean_identity', 'dropped_short', 'dropped_quality', 'dropped_n', 'malformed_records', 'paired_reads', 'joined_pairs', 'unjoined_pairs', 'unpaired_reads', 'read_limit_reached', 'warnings'];
+  const header = ['sample', 'label', 'files', 'estimated_records', 'parsed_records', 'passed_reads', 'aligned_reads', 'low_identity_reads', 'no_indel_reads', 'edited_reads', 'unique_allele_sequences', 'mean_quality', 'mean_identity', 'dropped_short', 'dropped_quality', 'dropped_n', 'malformed_records', 'paired_reads', 'joined_pairs', 'unjoined_pairs', 'unpaired_reads', 'read_limit_reached', 'warnings'];
   const rows = run.qcRows.map((row) => [
     row.sample,
     row.label,
@@ -1680,7 +1680,7 @@ function buildReport(run) {
     '',
     '## QC Summary',
     '',
-    '| sample | QC-passed reads | alignment-passed reads | low-identity excluded | joined pairs | unjoined pairs | unique reads | mean Q | mean identity | max edit % | warnings |',
+    '| sample | QC-passed reads | alignment-passed reads | low-identity excluded | joined pairs | unjoined pairs | unique allele sequences | mean Q | mean identity | max per-base edit % | warnings |',
     '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |',
     ...run.samples.map((sample) => `| ${sample.sample} | ${sample.qc.passedReads} | ${sample.qc.alignedReads} | ${sample.qc.lowIdentityReads} | ${sample.qc.joinedPairs || 0} | ${sample.qc.unjoinedPairs || 0} | ${sample.qc.uniqueReads} | ${formatNumber(sample.qc.meanQuality, 2)} | ${formatNumber(sample.qc.meanIdentity * 100, 2)}% | ${formatNumber(sample.maxPercent, 3)}% | ${sample.warnings.join('; ') || 'OK'} |`),
     '',
@@ -1857,7 +1857,7 @@ function printSummary(run, resultDir) {
   console.log(`QC-passed reads: ${run.summary.totalPassedReads}`);
   console.log(`Alignment-passed reads: ${run.samples.reduce((sum, sample) => sum + sample.qc.alignedReads, 0)}`);
   console.log(`Low-identity reads excluded: ${run.samples.reduce((sum, sample) => sum + sample.qc.lowIdentityReads, 0)}`);
-  console.log(`Alignment-passed unique reads: ${run.samples.reduce((sum, sample) => sum + sample.qc.uniqueReads, 0)}`);
+  console.log(`Unique allele sequences: ${run.samples.reduce((sum, sample) => sum + sample.qc.uniqueReads, 0)}`);
   console.log(`Mean identity: ${formatNumber(run.samples[0].qc.meanIdentity * 100, 3)}%`);
   console.log(`Max edit: ${formatNumber(run.summary.maxEditPercent, 3)}%`);
   if (topTarget) console.log(`Top target position: ${topTarget.position} ${topTarget.refBase}, ${formatNumber(topTarget.percent, 3)}%`);

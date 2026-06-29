@@ -16,7 +16,7 @@
 
 ## QC Summary
 
-| sample | QC-passed reads | alignment-passed reads | low-identity excluded | joined pairs | unjoined pairs | unique reads | mean Q | mean identity | max edit % | warnings |
+| sample | QC-passed reads | alignment-passed reads | low-identity excluded | joined pairs | unjoined pairs | unique allele sequences | mean Q | mean identity | max per-base edit % | warnings |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | emx1_base_editor | 25000 | 24976 | 24 | 0 | 0 | 3915 | 37.29 | 99.68% | 27.709% | low-identity reads excluded |
 
