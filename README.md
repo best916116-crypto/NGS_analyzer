@@ -13,7 +13,7 @@ https://best916116-crypto.github.io/NGS_analyzer/
 - FASTQ, FASTQ.GZ, and joined FASTQ text input
 - File or folder selection for numbered sample batches
 - Automatic R1/R2 sample grouping and overlap-consensus joining
-- Custom, Cas / CRISPR, and TALE / TALEN target annotation
+- Custom, Cas / CRISPR, TALE / TALEN, and Prime Editor target annotation
 - Optional multi-site analysis
 - Setting CSV import and template export
 - QC table, mutation table, allele spectrum, selected-sample allele reports, summary JSON, and heatmap export
@@ -51,17 +51,19 @@ If joined FASTQ files and raw R1/R2 files are provided for the same sample, join
 The app can export a setting template with one row per amplicon site:
 
 ```text
-site_name,reference_amplicon_sequence,target_positions,assay_type,spacer_sequence,pam_sequence,spacer_window,tale_left_sequence,tale_right_sequence,tale_spacer_sequence,tale_padding,expected_edit,sample_start,sample_end,expected_sample_count,preferred_input,notes
+site_name,reference_amplicon_sequence,target_positions,assay_type,spacer_sequence,pam_sequence,spacer_window,tale_left_sequence,tale_right_sequence,tale_spacer_sequence,tale_padding,prime_edited_amplicon_sequence,prime_intended_edits,prime_ignore_regions,expected_edit,sample_start,sample_end,expected_sample_count,preferred_input,notes
 ```
 
-Blank fields are ignored. `assay_type` may be `custom`, `cas`, or `tale`. If `assay_type` is blank, the app infers the assay from filled spacer, PAM, and TALE binding-site fields. For TALE / TALEN rows, the matched spacer is annotated as a targetable region; exact target bases come from `target_positions`.
+Blank fields are ignored. `assay_type` may be `custom`, `cas`, `tale`, or `prime`. If `assay_type` is blank, the app infers the assay from filled spacer, PAM, TALE binding-site, or Prime Editor fields. For TALE / TALEN rows, the matched spacer is annotated as a targetable region; exact target bases come from `target_positions`.
+
+Prime Editor mode separates intended and unwanted edits. Define intended edits with a full `prime_edited_amplicon_sequence` or a compact `prime_intended_edits` list such as `C45T,52insA,del61`. Use `prime_ignore_regions` for PBS, RTT, primer, or other regions that should remain in raw tables but be excluded from unwanted-edit signal.
 
 ## Outputs
 
 | Output | Contents |
 | --- | --- |
-| `processed_mutation_table.csv` | Position-level mutation counts and edit rates |
-| `target_window_table.csv` | Target-window subset of the mutation table |
+| `processed_mutation_table.csv` | Position-level mutation counts, intended/unwanted edit counts, and edit rates |
+| `target_window_table.csv` | Target-window subset of the mutation table, including Prime Editor intended/unwanted columns |
 | `substitution_matrix.csv` | Substitution counts by reference and observed base |
 | `allele_spectrum_table.csv` | Unique allele sequences and edit signatures |
 | `allele_report_<site>_<sample>.svg` | Publication-style allele spectrum report for the selected sample |

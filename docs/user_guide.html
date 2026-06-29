@@ -151,6 +151,7 @@
           <tr><td>Custom</td><td>Uses the 1-based target positions entered in the app.</td></tr>
           <tr><td>Cas / CRISPR</td><td>Finds the spacer, checks the PAM pattern when available, and maps the spacer window to amplicon coordinates.</td></tr>
           <tr><td>TALE / TALEN</td><td>Finds left and right TALE binding sites and annotates the intervening spacer as a targetable region.</td></tr>
+          <tr><td>Prime Editor</td><td>Separates intended edits from unwanted edits using an edited amplicon sequence, intended edit list, and optional ignore regions.</td></tr>
         </tbody>
       </table>
       <p class="note">The reference is the full alignment target. Exact target bases are taken from the target-position field. TALE / TALEN spacer annotations are shown separately from exact target bases.</p>
@@ -159,8 +160,9 @@
     <section class="panel">
       <h2>Setting CSV</h2>
       <p>The app can export a template with one row per amplicon site:</p>
-      <pre><code>site_name,reference_amplicon_sequence,target_positions,assay_type,spacer_sequence,pam_sequence,spacer_window,tale_left_sequence,tale_right_sequence,tale_spacer_sequence,tale_padding,expected_edit,sample_start,sample_end,expected_sample_count,preferred_input,notes</code></pre>
-      <p>Blank fields are ignored. Filled PAM fields infer Cas / CRISPR. TALE binding-site fields infer TALE / TALEN. Target positions alone use Custom mode.</p>
+      <pre><code>site_name,reference_amplicon_sequence,target_positions,assay_type,spacer_sequence,pam_sequence,spacer_window,tale_left_sequence,tale_right_sequence,tale_spacer_sequence,tale_padding,prime_edited_amplicon_sequence,prime_intended_edits,prime_ignore_regions,expected_edit,sample_start,sample_end,expected_sample_count,preferred_input,notes</code></pre>
+      <p>Blank fields are ignored. Filled PAM fields infer Cas / CRISPR. TALE binding-site fields infer TALE / TALEN. Prime Editor fields infer Prime Editor mode. Target positions alone use Custom mode.</p>
+      <p>Prime Editor intended edits can be supplied as a full edited amplicon sequence or a compact list such as <code>C45T,52insA,del61</code>. Ignore regions remain in raw output but are excluded from Prime Editor unwanted edit signal.</p>
     </section>
 
     <section class="panel">
@@ -176,8 +178,8 @@ site_C, ACGTACGT..., 12,18,22</code></pre>
       <table>
         <thead><tr><th>File</th><th>Contents</th></tr></thead>
         <tbody>
-          <tr><td><code>processed_mutation_table.csv</code></td><td>Position-level mutation counts and edit rates.</td></tr>
-          <tr><td><code>target_window_table.csv</code></td><td>Target-window rows from the mutation table.</td></tr>
+          <tr><td><code>processed_mutation_table.csv</code></td><td>Position-level mutation counts, intended/unwanted edit counts, and edit rates.</td></tr>
+          <tr><td><code>target_window_table.csv</code></td><td>Target-window rows from the mutation table, including Prime Editor intended/unwanted columns.</td></tr>
           <tr><td><code>substitution_matrix.csv</code></td><td>Reference-to-observed substitution counts.</td></tr>
           <tr><td><code>allele_spectrum_table.csv</code></td><td>Unique allele sequences and edit signatures.</td></tr>
           <tr><td><code>allele_report_&lt;site&gt;_&lt;sample&gt;.svg</code></td><td>Publication-style allele spectrum report for the selected sample.</td></tr>
@@ -197,6 +199,7 @@ site_C, ACGTACGT..., 12,18,22</code></pre>
       <h2>Calculation</h2>
       <pre><code>edit percentage = selected signal reads at position / position-level covered reads * 100</code></pre>
       <p>Coordinates are 1-based amplicon positions. Reads below the minimum alignment identity are excluded from mutation calling.</p>
+      <p>Prime Editor unwanted signal excludes edits matching the intended edit set and edits inside the configured ignore regions. Raw substitution, insertion, and deletion counts remain available in the processed table.</p>
       <p>When an expected base edit is selected, expected-edit percentages are calculated only across editable bases inside the current target positions. Changing target positions changes this target-specific summary by design; whole-amplicon QC and alignment counts do not depend on the target window.</p>
     </section>
 

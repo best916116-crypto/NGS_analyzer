@@ -24,6 +24,8 @@ function main() {
   const assayInput = Object.keys(configAssay).length ? configAssay : (setting?.assay || {});
   if (!assayInput.expectedEdit && setting?.expectedEdit) assayInput.expectedEdit = setting.expectedEdit;
   const assay = deriveAssayTargets(reference, assayInput, targetPositions);
+  settings.primeModel = assay.primeModel || null;
+  if (normalizeAssayType(assayInput.type) === 'prime' && !config.settings?.signalMode) settings.signalMode = 'unwanted';
   const groups = collectInputGroups(config, configDir, setting);
   if (!groups.length) throw new Error('No FASTQ input files were found.');
   const expectedCount = Number(config.dataset?.expectedSampleCount || setting?.expectedSampleCount || 0);
@@ -56,7 +58,7 @@ function normalizeSettings(settings = {}) {
     minIdentity: normalizeMinIdentity(settings.minIdentity ?? 0.8),
     dropN: settings.dropN !== false,
     minDepth: Math.max(0, Number(settings.minDepth ?? 0) || 0),
-    signalMode: ['all', 'substitution', 'indel'].includes(settings.signalMode) ? settings.signalMode : 'all'
+    signalMode: ['all', 'substitution', 'indel', 'unwanted', 'intended'].includes(settings.signalMode) ? settings.signalMode : 'all'
   };
 }
 
@@ -233,6 +235,9 @@ const SETTING_ALIASES = {
   taleRight: ['tale_right_sequence', 'right_tale_sequence', 'right_binding_site', 'tale_right', 'right_binding'],
   taleSpacer: ['tale_spacer_sequence', 'tale_spacer', 'talen_spacer', 'known_spacer_sequence'],
   talePadding: ['tale_padding', 'window_padding', 'padding'],
+  primeEditedSequence: ['prime_edited_amplicon_sequence', 'edited_amplicon_sequence', 'intended_edited_amplicon', 'intended_amplicon_sequence', 'edited_reference'],
+  primeEdits: ['prime_intended_edits', 'intended_edits', 'intended_edit_list', 'peg_edit', 'prime_edit'],
+  primeIgnore: ['prime_ignore_regions', 'ignore_regions', 'unwanted_ignore_regions', 'pbs_rtt_regions', 'rt_pbs_regions'],
   expectedEdit: ['expected_edit', 'base_edit', 'conversion'],
   sampleStart: ['sample_start', 'first_sample_number', 'first_sample', 'start_sample'],
   sampleEnd: ['sample_end', 'last_sample_number', 'last_sample', 'end_sample'],
@@ -282,7 +287,10 @@ function parseModernSettingRow(row, header, index, settingCsv) {
     left: normalizeSeq(get('taleLeft')),
     right: normalizeSeq(get('taleRight')),
     taleSpacer: normalizeSeq(get('taleSpacer')),
-    padding: get('talePadding').trim()
+    padding: get('talePadding').trim(),
+    primeEditedSequence: normalizeSeq(get('primeEditedSequence')),
+    primeEdits: get('primeEdits').trim(),
+    primeIgnore: get('primeIgnore').trim()
   };
   values.type = inferAssayType(values);
   if (values.type === 'cas') {
@@ -332,7 +340,8 @@ function unwrapSpreadsheetText(value) {
 function normalizeAssayType(value) {
   const key = String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
   if (!key) return '';
-  if (['cas', 'crispr', 'crisprcas', 'cas9', 'cas12', 'baseeditor', 'primeeditor'].includes(key)) return 'cas';
+  if (['prime', 'primeeditor', 'pe', 'pegrna', 'peg'].includes(key)) return 'prime';
+  if (['cas', 'crispr', 'crisprcas', 'cas9', 'cas12', 'baseeditor'].includes(key)) return 'cas';
   if (['tale', 'talen', 'taleen'].includes(key)) return 'tale';
   if (['custom', 'manual', 'window'].includes(key)) return 'custom';
   return '';
@@ -340,6 +349,7 @@ function normalizeAssayType(value) {
 
 function inferAssayType(values) {
   if (values.type) return values.type;
+  if (values.primeEditedSequence || values.primeEdits || values.primeIgnore) return 'prime';
   if (values.pam) return 'cas';
   if (values.left || values.right || values.taleSpacer || values.spacer) return 'tale';
   return 'custom';
@@ -426,9 +436,29 @@ function deriveAssayTargets(reference, assay, manualTargets) {
     source: manual.size ? 'manual / fallback target positions' : 'no target positions',
     warning,
     details: {},
-    spacerRegion: null
+    spacerRegion: null,
+    primeModel: null
   });
   const assayType = normalizeAssayType(assay.type) || 'custom';
+
+  if (assayType === 'prime') {
+    const primeModel = buildPrimeModel(reference, assay);
+    const targets = manual.size ? manual : new Set(primeModel.intendedPositions);
+    return {
+      targets,
+      source: `Prime editor - ${primeModel.intendedEdits.length ? `${primeModel.intendedEdits.length} intended edit(s)` : 'no intended edits'}${primeModel.ignorePositions.size ? ` - ${primeModel.ignorePositions.size} ignored position(s)` : ''}`,
+      warning: primeModel.warnings.join(' '),
+      details: {
+        intendedEditCount: primeModel.intendedEdits.length,
+        intendedEdits: primeModel.intendedEdits.map(formatEditLabel),
+        ignoreRegions: primeModel.ignoreText,
+        editedAmpliconLength: primeModel.editedSequenceLength || 0,
+        expectedEdit: assay.expectedEdit || null
+      },
+      spacerRegion: null,
+      primeModel
+    };
+  }
 
   if (assayType === 'cas') {
     const spacer = normalizeSeq(assay.spacer || '');
@@ -499,6 +529,95 @@ function deriveAssayTargets(reference, assay, manualTargets) {
   }
 
   return fallback('');
+}
+
+function buildPrimeModel(reference, assay) {
+  const intendedEdits = [];
+  const warnings = [];
+  const editedSequence = normalizeSeq(assay.primeEditedSequence || assay.editedAmpliconSequence || assay.intendedEditedAmplicon || '');
+  if (editedSequence) {
+    if (editedSequence.length < 20) {
+      warnings.push('Prime editor mode: intended edited amplicon is shorter than 20 bp and was ignored.');
+    } else {
+      const alignment = alignCandidate(reference, editedSequence, 'forward');
+      const edits = collectEdits(alignment).items;
+      intendedEdits.push(...edits);
+      if (alignment.identity < 0.7) warnings.push('Prime editor mode: intended edited amplicon aligns poorly to the reference; check the sequence.');
+    }
+  }
+  const parsedManual = parsePrimeEditList(reference, assay.primeEdits || assay.intendedEdits || '');
+  intendedEdits.push(...parsedManual.edits);
+  warnings.push(...parsedManual.warnings);
+  const deduped = [];
+  const seen = new Set();
+  for (const edit of intendedEdits) {
+    const key = editKey(edit);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(edit);
+  }
+  const ignoreText = assay.primeIgnore || assay.ignoreRegions || '';
+  const ignorePositions = parseTargets(ignoreText);
+  if (!deduped.length) warnings.push('Prime editor mode: no intended edits were defined; unwanted signal will count all non-ignored edits.');
+  return {
+    intendedEdits: deduped,
+    intendedKeys: new Set(deduped.map(editKey)),
+    intendedPositions: new Set(deduped.filter((edit) => edit.position).map((edit) => edit.position)),
+    ignorePositions,
+    ignoreText,
+    editedSequenceLength: editedSequence.length,
+    warnings
+  };
+}
+
+function parsePrimeEditList(reference, value) {
+  const edits = [];
+  const warnings = [];
+  const tokens = String(value || '').split(/[,\s;]+/).map((token) => token.trim()).filter(Boolean);
+  tokens.forEach((token) => {
+    const parsed = parsePrimeEditToken(reference, token);
+    if (parsed) edits.push(...parsed);
+    else warnings.push(`Prime editor mode: could not parse intended edit "${token}".`);
+  });
+  return { edits, warnings };
+}
+
+function parsePrimeEditToken(reference, token) {
+  const text = String(token || '').toUpperCase().replace(/\s+/g, '');
+  let match = text.match(/^([ACGT])(\d+)>?([ACGT])$/);
+  if (match) return [{ type: 'substitution', position: Number(match[2]), ref: match[1], alt: match[3] }];
+  match = text.match(/^(\d+):?([ACGT])>([ACGT])$/);
+  if (match) return [{ type: 'substitution', position: Number(match[1]), ref: match[2], alt: match[3] }];
+  match = text.match(/^DEL(\d+)([ACGT])?$/) || text.match(/^(\d+)DEL([ACGT])?$/);
+  if (match) {
+    const position = Number(match[1]);
+    const ref = match[2] || reference[position - 1] || 'N';
+    return [{ type: 'deletion', position, ref, alt: '-' }];
+  }
+  match = text.match(/^INS(\d+)([ACGT]+)$/) || text.match(/^(\d+)INS([ACGT]+)$/);
+  if (match) {
+    const position = Number(match[1]);
+    return match[2].split('').map((base) => ({ type: 'insertion', position, ref: '+', alt: base }));
+  }
+  return null;
+}
+
+function editKey(edit) {
+  if (!edit || !edit.type || !edit.position) return '';
+  return `${edit.type}:${edit.position}:${edit.ref || ''}>${edit.alt || ''}`;
+}
+
+function formatEditLabel(edit) {
+  if (edit.type === 'substitution') return `${edit.ref}${edit.position}${edit.alt}`;
+  if (edit.type === 'deletion') return `del${edit.position}${edit.ref && edit.ref !== 'N' ? edit.ref : ''}`;
+  if (edit.type === 'insertion') return `${edit.position}ins${edit.alt}`;
+  return editKey(edit);
+}
+
+function classifyEdit(edit, primeModel) {
+  if (primeModel && primeModel.intendedKeys && primeModel.intendedKeys.has(editKey(edit))) return 'intended';
+  if (primeModel && primeModel.ignorePositions && primeModel.ignorePositions.has(edit.position)) return 'ignored';
+  return 'unwanted';
 }
 
 function positionsFromRange(start, end, length) {
@@ -976,6 +1095,8 @@ function analyzeSample(group, parsedGroup, reference, settings) {
     nonIndelSubstitutionReads: 0,
     deletionReads: 0,
     insertionReads: 0,
+    intendedEditReads: 0,
+    unwantedEditReads: 0,
     editedReads: 0,
     coveredReads: 0,
     A: 0,
@@ -995,6 +1116,7 @@ function analyzeSample(group, parsedGroup, reference, settings) {
   let lowIdentityReads = 0;
   let totalIdentity = 0;
   let identityWeight = 0;
+  const primeModel = settings.primeModel || null;
   const uniqueRows = Array.from(parsedGroup.unique.values()).sort((a, b) => b.count - a.count);
 
   for (const row of uniqueRows) {
@@ -1037,6 +1159,9 @@ function analyzeSample(group, parsedGroup, reference, settings) {
       } else if (edit.type === 'insertion') {
         stat.insertionReads += row.count;
       }
+      const editClass = classifyEdit(edit, primeModel);
+      if (editClass === 'intended') stat.intendedEditReads += row.count;
+      else if (editClass === 'unwanted') stat.unwantedEditReads += row.count;
       editedPositions.add(edit.position);
     }
     if (!edits.hasIndel) {
@@ -1077,6 +1202,9 @@ function analyzeSample(group, parsedGroup, reference, settings) {
       nonIndelSubstitutionReads: stat.nonIndelSubstitutionReads,
       deletionReads: stat.deletionReads,
       insertionReads: stat.insertionReads,
+      intendedEditReads: stat.intendedEditReads,
+      unwantedEditReads: stat.unwantedEditReads,
+      ignoredRegion: !!(primeModel && primeModel.ignorePositions && primeModel.ignorePositions.has(stat.position)),
       editedReads: stat.editedReads,
       displayReads,
       denominator: stat.coveredReads,
@@ -1140,6 +1268,8 @@ function analyzeSample(group, parsedGroup, reference, settings) {
 function getSignalReads(stat, mode) {
   if (mode === 'substitution') return stat.substitutionReads;
   if (mode === 'indel') return stat.deletionReads + stat.insertionReads;
+  if (mode === 'intended') return stat.intendedEditReads || 0;
+  if (mode === 'unwanted') return stat.unwantedEditReads || 0;
   return stat.editedReads;
 }
 
@@ -1401,7 +1531,8 @@ function buildRunResult(samples, reference, settings, assay, config, inputFile) 
       targetWarning: assay.warning,
       targetPositions: Array.from(assay.targets).sort((a, b) => a - b),
       details: assay.details,
-      spacerRegion: assay.spacerRegion
+      spacerRegion: assay.spacerRegion,
+      primeEditor: serializePrimeModel(assay.primeModel)
     },
     samples,
     mutationRows,
@@ -1490,8 +1621,8 @@ function toSerializableRun(run) {
     dataset: run.dataset,
     inputFile: run.inputFile,
     referenceLength: run.reference.length,
-    settings: run.settings,
-    assay: run.assay,
+    settings: serializeSettings(run.settings),
+    assay: { ...run.assay, primeEditor: serializePrimeModel(run.settings.primeModel) },
     summary,
     qcRows: run.qcRows,
     topMutationRows: run.mutationRows.slice().sort((a, b) => b.percent - a.percent).slice(0, 20).map(publicMutationRow),
@@ -1501,13 +1632,27 @@ function toSerializableRun(run) {
   };
 }
 
+function serializeSettings(settings) {
+  return { ...settings, primeModel: serializePrimeModel(settings.primeModel) };
+}
+
+function serializePrimeModel(model) {
+  if (!model) return null;
+  return {
+    intendedEdits: (model.intendedEdits || []).map(formatEditLabel),
+    ignoredPositions: Array.from(model.ignorePositions || []).sort((a, b) => a - b),
+    ignoreRegions: model.ignoreText || '',
+    editedAmpliconLength: model.editedSequenceLength || 0
+  };
+}
+
 function publicMutationRow(row) {
   const { nonIndelSubstitutionReads, ...rest } = row;
   return rest;
 }
 
 function buildMutationCsv(run) {
-  const header = ['sample', 'label', 'position', 'ref_base', 'substitution_reads', 'deletion_reads', 'insertion_reads', 'signal_reads', 'denominator', 'percent', 'A', 'C', 'G', 'T', 'N'];
+  const header = ['sample', 'label', 'position', 'ref_base', 'substitution_reads', 'deletion_reads', 'insertion_reads', 'intended_edit_reads', 'unwanted_edit_reads', 'ignored_region', 'signal_reads', 'denominator', 'percent', 'A', 'C', 'G', 'T', 'N'];
   const rows = run.mutationRows.map((row) => [
     row.sample,
     row.label,
@@ -1516,6 +1661,9 @@ function buildMutationCsv(run) {
     row.substitutionReads,
     row.deletionReads,
     row.insertionReads,
+    row.intendedEditReads || 0,
+    row.unwantedEditReads || 0,
+    row.ignoredRegion ? 'true' : 'false',
     row.displayReads,
     row.denominator,
     row.percent,
@@ -1646,7 +1794,7 @@ function buildConversionCsv(run) {
 }
 
 function buildTargetCsv(run) {
-  const header = ['sample', 'position', 'ref_base', 'substitution_reads', 'deletion_reads', 'insertion_reads', 'signal_reads', 'denominator', 'percent', 'expected_edit_reads', 'expected_edit_percent', 'A', 'C', 'G', 'T', 'N'];
+  const header = ['sample', 'position', 'ref_base', 'substitution_reads', 'deletion_reads', 'insertion_reads', 'intended_edit_reads', 'unwanted_edit_reads', 'ignored_region', 'signal_reads', 'denominator', 'percent', 'expected_edit_reads', 'expected_edit_percent', 'A', 'C', 'G', 'T', 'N'];
   const rows = run.targetRows.map((row) => [
     row.sample,
     row.position,
@@ -1654,6 +1802,9 @@ function buildTargetCsv(run) {
     row.substitutionReads,
     row.deletionReads,
     row.insertionReads,
+    row.intendedEditReads || 0,
+    row.unwantedEditReads || 0,
+    row.ignoredRegion ? 'true' : 'false',
     row.displayReads,
     row.denominator,
     row.percent,
@@ -1837,12 +1988,16 @@ function rangesFromPositions(positions) {
 function getFigureLegendLabel(mode) {
   if (mode === 'substitution') return 'Base substitution (%)';
   if (mode === 'indel') return 'Indel (%)';
+  if (mode === 'intended') return 'Intended edit (%)';
+  if (mode === 'unwanted') return 'Unwanted edit (%)';
   return 'Edit (%)';
 }
 
 function getSignalLabel(mode) {
   if (mode === 'substitution') return 'Base substitution (%)';
   if (mode === 'indel') return 'Indel-only edit rate';
+  if (mode === 'intended') return 'Prime editor intended edit rate';
+  if (mode === 'unwanted') return 'Prime editor unwanted edit rate';
   return 'Substitution + indel edit rate';
 }
 
