@@ -25,7 +25,7 @@ https://best916116-crypto.github.io/NGS_analyzer/
 2. Enter the site name and full reference amplicon sequence.
 3. Select the assay type and exact target positions.
 4. Add FASTQ files or choose a folder.
-5. Adjust QC and alignment settings if needed.
+5. Adjust QC and alignment settings if needed. Leave `Read limit per sample` blank, or enter `0`, to process all reads.
 6. Run the analysis.
 7. Export tables, summary files, and figures.
 
@@ -43,6 +43,8 @@ https://best916116-crypto.github.io/NGS_analyzer/
 For raw paired-end files, filenames with common `R1` / `R2` markers are grouped by sample. R2 reads are reverse-complemented and joined to R1 when a high-confidence overlap is found. Unjoined pairs are reported in the QC export.
 
 If joined FASTQ files and raw R1/R2 files are provided for the same sample, joined files are used and raw files are skipped for that sample.
+
+`Read limit per sample` is optional. When it is blank or `0`, every parsed read is processed. Use a numeric limit only for quick validation runs because downstream read counts and allele frequencies will be based on that subset.
 
 ## Setting CSV
 

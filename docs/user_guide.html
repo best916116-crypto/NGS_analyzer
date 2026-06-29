@@ -140,6 +140,7 @@
       </table>
       <p>R1/R2 filenames are grouped by inferred sample name. Raw pairs are converted to overlap-consensus reads when a high-confidence overlap is found. Unjoined pairs remain visible in QC exports.</p>
       <p>If joined and raw files are provided for the same sample, joined files are used for that sample.</p>
+      <p><strong>Read limit per sample</strong> is optional. Leave it blank, or enter <code>0</code>, to process every read. Numeric limits are intended only for quick validation runs because read counts and allele frequencies are then calculated from the limited subset.</p>
     </section>
 
     <section class="panel">
@@ -196,7 +197,7 @@ site_C, ACGTACGT..., 12,18,22</code></pre>
       <h2>Calculation</h2>
       <pre><code>edit percentage = selected signal reads at position / position-level covered reads * 100</code></pre>
       <p>Coordinates are 1-based amplicon positions. Reads below the minimum alignment identity are excluded from mutation calling.</p>
-      <p>When an expected base edit is selected, expected-edit percentages are calculated only across editable target-window bases.</p>
+      <p>When an expected base edit is selected, expected-edit percentages are calculated only across editable bases inside the current target positions. Changing target positions changes this target-specific summary by design; whole-amplicon QC and alignment counts do not depend on the target window.</p>
     </section>
 
     <section class="panel">

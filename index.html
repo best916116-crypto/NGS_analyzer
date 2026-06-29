@@ -898,7 +898,8 @@
           <div class="inline-grid">
             <div class="field">
               <label for="readLimit">Read limit per sample</label>
-              <input id="readLimit" type="number" min="100" step="100" value="50000">
+              <input id="readLimit" type="number" min="0" step="100" placeholder="All reads">
+              <p class="hint">Leave blank or enter 0 to process every read.</p>
             </div>
             <div class="field">
               <label for="minIdentity">Minimum alignment identity (%)</label>
@@ -1063,6 +1064,7 @@
         expectedEdit: 'C>T',
         fastqPath: 'benchmarks/public/crispresso2_base_editor/raw/base_editor.fastq.gz'
       };
+      const READ_LIMIT_ALL = Number.MAX_SAFE_INTEGER;
       const BASES = ['A', 'C', 'G', 'T', 'N'];
       const state = {
         files: [],
@@ -1144,6 +1146,21 @@
 
       function formatInt(value) {
         return Math.round(Number(value) || 0).toLocaleString();
+      }
+
+      function normalizeReadLimit(value) {
+        const text = String(value ?? '').trim().toLowerCase().replace(/,/g, '');
+        if (!text || text === '0' || text === 'all' || text === 'unlimited') return READ_LIMIT_ALL;
+        const limit = Number(text);
+        return Number.isFinite(limit) && limit > 0 ? Math.max(1, Math.floor(limit)) : READ_LIMIT_ALL;
+      }
+
+      function hasFiniteReadLimit(value) {
+        return Number.isFinite(value) && value < READ_LIMIT_ALL / 2;
+      }
+
+      function formatReadLimit(value) {
+        return hasFiniteReadLimit(value) ? `${formatInt(value)} reads/sample` : 'all reads';
       }
 
       function formatPct(value, digits = 1) {
@@ -1440,6 +1457,7 @@
         if (!targetPositions.length && !hasSpacerAnnotation) warnings.push('No target positions are currently defined.');
         if (!targetPositions.length && hasSpacerAnnotation) warnings.push('No exact target positions are defined; the spacer region will be annotated only.');
         if (settings.targetWarning) warnings.push(settings.targetWarning);
+        if (hasFiniteReadLimit(settings.readLimit)) warnings.push(`Read limit is active: only the first ${formatInt(settings.readLimit)} read(s) per sample will be processed.`);
         if (state.files.some((file) => /\.gz$/i.test(file.name)) && !('DecompressionStream' in window)) warnings.push('This browser cannot decompress FASTQ.GZ files.');
         warnings.push('Raw R1/R2 files are joined by high-confidence overlap consensus when possible; joined FASTQ files take precedence if both are present.');
         warnings.push('Adapter trimming is not performed; trim adapters upstream when needed.');
@@ -1461,7 +1479,7 @@
             <div class="preflight-row"><span>Assay inference</span><strong>${escapeHtml(settings.targetSource)}</strong></div>
             <div class="preflight-row"><span>Target positions</span><strong>${escapeHtml(targetPositions.join(', ') || 'none')}</strong></div>
             <div class="preflight-row"><span>Expected edit</span><strong>${escapeHtml(settings.expectedEdit ? settings.expectedEdit.label : 'not specified')}</strong></div>
-            <div class="preflight-row"><span>Run settings</span><strong>Q >= ${settings.minQ}, length >= ${settings.minLen} bp, identity >= ${formatPct(settings.minIdentity * 100, 1)}%, limit ${formatInt(settings.readLimit)} reads/sample</strong></div>
+            <div class="preflight-row"><span>Run settings</span><strong>Q >= ${settings.minQ}, length >= ${settings.minLen} bp, identity >= ${formatPct(settings.minIdentity * 100, 1)}%, limit ${formatReadLimit(settings.readLimit)}</strong></div>
           </div>
           <ul class="warning-list">${warnings.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
         `;
@@ -1793,7 +1811,7 @@
         return {
           minQ: Math.max(0, Number(els.minQ.value) || 0),
           minLen: Math.max(1, Number(els.minLen.value) || 1),
-          readLimit: Math.max(100, Number(els.readLimit.value) || 100),
+          readLimit: normalizeReadLimit(els.readLimit.value),
           minIdentity: Math.max(0, Math.min(100, Number(els.minIdentity.value) || 0)) / 100,
           dropN: els.dropN.checked,
           minDepth: Math.max(0, Number(els.minDepth.value) || 0),
@@ -2193,7 +2211,9 @@
       async function parsePairedFastqFiles(r1Files, r2Files, settings) {
         const parsed = emptyParsedGroup();
         const r1ById = new Map();
-        const pairScanLimit = Math.max(settings.readLimit * 2, settings.readLimit + 1000);
+        const pairScanLimit = hasFiniteReadLimit(settings.readLimit)
+          ? Math.max(settings.readLimit * 2, settings.readLimit + 1000)
+          : READ_LIMIT_ALL;
         for (const file of r1Files) {
           const records = parseFastqRecords(await readTextFile(file), pairScanLimit);
           parsed.estimatedRecords += records.estimatedRecords;
@@ -2210,7 +2230,7 @@
           parsed.malformedRecords += records.malformedRecords;
           parsed.readLimitReached = parsed.readLimitReached || records.readLimitReached;
           for (const r2 of records.records) {
-            if (parsed.pairStats.joinedPairs >= settings.readLimit) {
+            if (hasFiniteReadLimit(settings.readLimit) && parsed.pairStats.joinedPairs >= settings.readLimit) {
               parsed.readLimitReached = true;
               break;
             }
@@ -2343,7 +2363,9 @@
         target.qualityReads += parsed.qualityReads || 0;
         target.basesKept += parsed.basesKept || 0;
         if (parsed.meanQuality && (parsed.qualityReads || parsed.keptRecords)) target.meanQualityParts.push({ mean: parsed.meanQuality, n: parsed.qualityReads || parsed.keptRecords });
-        target.readLengths.push(...(parsed.readLengths || []).filter(Boolean));
+        for (const value of parsed.readLengths || []) {
+          if (value) target.readLengths.push(value);
+        }
         (parsed.warnings || []).forEach((warning) => target.warnings.push(warning));
         if (parsed.pairStats) {
           target.pairStats.pairedReads += parsed.pairStats.pairedReads || 0;
@@ -4148,6 +4170,7 @@
           `- Sample number filter: ${describeSampleRange(run)}`,
           `- Minimum mean Q: ${settings.minQ}`,
           `- Minimum read length: ${settings.minLen}`,
+          `- Read limit per sample: ${formatReadLimit(settings.readLimit)}`,
           `- Minimum alignment identity: ${formatPct(settings.minIdentity * 100, 1)}%`,
           `- Max edit percentage: ${formatPct(maxEdit, 3)}%`,
           '',
@@ -4498,7 +4521,7 @@
         els.minDepth.value = '100';
         els.minQ.value = '20';
         els.minLen.value = '30';
-        els.readLimit.value = '50000';
+        els.readLimit.value = '';
         els.minIdentity.value = '80';
         els.sampleStart.value = '';
         els.sampleEnd.value = '';
@@ -4536,7 +4559,7 @@
         els.minDepth.value = '100';
         els.minQ.value = '20';
         els.minLen.value = '30';
-        els.readLimit.value = '50000';
+        els.readLimit.value = '';
         els.minIdentity.value = '80';
         els.sampleStart.value = '';
         els.sampleEnd.value = '';
@@ -4625,7 +4648,7 @@
           assayDetails: settings.assayDetails,
           minQ: settings.minQ,
           minLen: settings.minLen,
-          readLimit: settings.readLimit,
+          readLimit: hasFiniteReadLimit(settings.readLimit) ? settings.readLimit : 'all',
           minIdentity: settings.minIdentity,
           sampleNumberFilter: serializableSampleRange(settings.sampleRange),
           expectedSampleCount: settings.expectedSampleCount,

@@ -5,6 +5,7 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 
 const BASES = ['A', 'C', 'G', 'T', 'N'];
+const READ_LIMIT_ALL = Number.MAX_SAFE_INTEGER;
 
 function main() {
   const configPath = path.resolve(process.argv[2] || 'benchmarks/public/crispresso2_base_editor/config.json');
@@ -51,12 +52,23 @@ function normalizeSettings(settings = {}) {
   return {
     minQ: Math.max(0, Number(settings.minQ ?? 20) || 0),
     minLen: Math.max(1, Number(settings.minLen ?? 30) || 1),
-    readLimit: Math.max(1, Number(settings.readLimit ?? 50000) || 1),
+    readLimit: normalizeReadLimit(settings.readLimit),
     minIdentity: normalizeMinIdentity(settings.minIdentity ?? 0.8),
     dropN: settings.dropN !== false,
     minDepth: Math.max(0, Number(settings.minDepth ?? 0) || 0),
     signalMode: ['all', 'substitution', 'indel'].includes(settings.signalMode) ? settings.signalMode : 'all'
   };
+}
+
+function normalizeReadLimit(value) {
+  const text = String(value ?? '').trim().toLowerCase().replace(/,/g, '');
+  if (!text || text === '0' || text === 'all' || text === 'unlimited') return READ_LIMIT_ALL;
+  const limit = Number(text);
+  return Number.isFinite(limit) && limit > 0 ? Math.max(1, Math.floor(limit)) : READ_LIMIT_ALL;
+}
+
+function hasFiniteReadLimit(value) {
+  return Number.isFinite(value) && value < READ_LIMIT_ALL / 2;
 }
 
 function normalizeMinIdentity(value) {
@@ -660,7 +672,9 @@ function mergeParsedGroup(target, parsed) {
   target.qualityReads += parsed.qualityReads || 0;
   target.basesKept += parsed.basesKept || 0;
   if (parsed.keptRecords) target.meanQualityParts.push({ mean: parsed.meanQuality, n: parsed.keptRecords });
-  target.readLengths.push(...parsed.readLengths);
+  for (const value of parsed.readLengths || []) {
+    if (value) target.readLengths.push(value);
+  }
   (parsed.warnings || []).forEach((warning) => target.warnings.push(warning));
   if (parsed.pairStats) {
     target.pairStats.pairedReads += parsed.pairStats.pairedReads || 0;
@@ -807,7 +821,9 @@ function parseInputGroup(group, settings) {
 function parsePairedFastqFiles(r1Paths, r2Paths, settings) {
   const parsed = emptyParsedGroup();
   const r1ById = new Map();
-  const pairScanLimit = Math.max(settings.readLimit * 2, settings.readLimit + 1000);
+  const pairScanLimit = hasFiniteReadLimit(settings.readLimit)
+    ? Math.max(settings.readLimit * 2, settings.readLimit + 1000)
+    : READ_LIMIT_ALL;
   for (const filePath of r1Paths) {
     const records = parseFastqRecords(readFastq(filePath), pairScanLimit);
     parsed.estimatedRecords += records.estimatedRecords;
@@ -824,7 +840,7 @@ function parsePairedFastqFiles(r1Paths, r2Paths, settings) {
     parsed.malformedRecords += records.malformedRecords;
     parsed.readLimitReached = parsed.readLimitReached || records.readLimitReached;
     for (const r2 of records.records) {
-      if (parsed.pairStats.joinedPairs >= settings.readLimit) {
+      if (hasFiniteReadLimit(settings.readLimit) && parsed.pairStats.joinedPairs >= settings.readLimit) {
         parsed.readLimitReached = true;
         break;
       }
@@ -1675,6 +1691,7 @@ function buildReport(run) {
     `- Edit signal shown in heatmap: ${getSignalLabel(run.settings.signalMode)}`,
     `- Target source: ${run.assay.targetSource}`,
     `- Target positions: ${run.assay.targetPositions.join(', ') || 'none'}`,
+    `- Read limit per sample: ${formatReadLimit(run.settings.readLimit)}`,
     `- Minimum alignment identity: ${formatNumber(run.settings.minIdentity * 100, 1)}%`,
     `- Max edit percentage: ${formatNumber(run.summary.maxEditPercent, 3)}%`,
     '',
@@ -1847,6 +1864,10 @@ function clip(value, length) {
 function formatNumber(value, digits = 1) {
   const n = Number(value);
   return Number.isFinite(n) ? n.toFixed(digits) : '0.0';
+}
+
+function formatReadLimit(value) {
+  return hasFiniteReadLimit(value) ? `${Math.round(Number(value)).toLocaleString()} reads/sample` : 'all reads';
 }
 
 function printSummary(run, resultDir) {
