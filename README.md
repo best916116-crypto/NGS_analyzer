@@ -149,3 +149,13 @@ The public benchmark demonstrates that the bundled pipeline reproducibly process
 |   `-- validate-paired-end.mjs
 `-- README.md
 ```
+
+## Feedback and validation reports
+
+Comparisons with CRISPResso2 or other independent amplicon callers, unexpected results, and reproducible edge cases are welcome. Please open a [GitHub Issue](https://github.com/Park-Junjae/NGS_analyzer/issues) or email [best916116@gmail.com](mailto:best916116@gmail.com).
+
+When possible, include the assay type, reference amplicon, relevant settings, browser version, expected result, observed result, and a minimal anonymized fixture. Do not send identifiable, restricted, or unpublished sequencing data by email.
+
+## License
+
+Amplicon Analyzer is open-source software released under the [MIT License](LICENSE).
