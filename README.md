@@ -1,12 +1,16 @@
 # Amplicon Analyzer
 
-Amplicon Analyzer is a static web app for amplicon FASTQ analysis. It runs read QC, paired-end overlap joining, reference alignment, mutation calling, and figure export from a browser page.
+<p align="center">
+  <img src="docs/assets/amplicon-analyzer.png" alt="Amplicon Analyzer browser interface" width="1200">
+</p>
 
-Open the app:
+Amplicon Analyzer is a browser-based application for going directly from amplicon FASTQ files to read QC, paired-end overlap joining, reference alignment, mutation calls, allele summaries, and export-ready figures.
 
-```text
-https://best916116-crypto.github.io/NGS_analyzer/
-```
+**[Open Amplicon Analyzer](https://park-junjae.github.io/NGS_analyzer/)**
+
+**[Open the user guide](https://park-junjae.github.io/NGS_analyzer/docs/user_guide.html)**
+
+No installation or command line is required for routine analysis.
 
 ## Features
 
@@ -28,6 +32,33 @@ https://best916116-crypto.github.io/NGS_analyzer/
 5. Adjust QC and alignment settings if needed. Leave `Read limit per sample` blank, or enter `0`, to process all reads.
 6. Run the analysis.
 7. Export tables, summary files, and figures.
+
+## Analysis workflow
+
+```text
+FASTQ / FASTQ.GZ
+        |
+        v
+read parsing and quality filtering
+        |
+        v
+R1/R2 grouping and overlap consensus
+        |
+        v
+reference-orientation selection and alignment
+        |
+        v
+substitution / insertion / deletion calling
+        |
+        v
+QC tables, allele spectra, reports, SVG and PNG figures
+```
+
+## Data handling
+
+Selected FASTQ files are analyzed in browser memory. The application code does not upload local sequence files to an analysis server. Loading the optional example benchmark fetches only that public fixture.
+
+Because large FASTQ runs are processed on the user's device, runtime and memory use depend on browser and machine capacity. Use the read-limit option for a quick inspection, then remove the limit for the final analysis.
 
 ## Inputs
 
@@ -78,7 +109,7 @@ Prime Editor mode separates intended and unwanted edits. Define intended edits w
 | `amplicon_run_report.md` | Markdown run report |
 | `amplicon_run_report.html` | Self-contained HTML report |
 
-## Validation
+## Included reproducibility checks
 
 Run the public FASTQ benchmark:
 
@@ -93,6 +124,15 @@ node tools/validate-paired-end.mjs
 ```
 
 The paired-end test generates matching raw R1/R2 and joined FASTQ fixtures, then checks that both analysis paths report the same aligned read count, target edit position, and edit percentage.
+
+The public benchmark demonstrates that the bundled pipeline reproducibly processes a published example FASTQ dataset. It is not, by itself, a full concordance study against CRISPResso2 or another independent caller. The paired-end check tests internal path consistency on a synthetic truth fixture.
+
+## Interpretation limits
+
+- Results depend on the supplied reference, target coordinates, quality thresholds, and alignment settings.
+- A low-frequency call is not automatically a validated biological edit.
+- Browser analysis is intended for research exploration and reporting, not clinical or diagnostic use.
+- Confirm consequential findings with an independent pipeline and appropriate experimental controls.
 
 ## Repository Layout
 
@@ -109,3 +149,13 @@ The paired-end test generates matching raw R1/R2 and joined FASTQ fixtures, then
 |   `-- validate-paired-end.mjs
 `-- README.md
 ```
+
+## Feedback and validation reports
+
+Comparisons with CRISPResso2 or other independent amplicon callers, unexpected results, and reproducible edge cases are welcome. Please open a [GitHub Issue](https://github.com/Park-Junjae/NGS_analyzer/issues) or email [best916116@gmail.com](mailto:best916116@gmail.com).
+
+When possible, include the assay type, reference amplicon, relevant settings, browser version, expected result, observed result, and a minimal anonymized fixture. Do not send identifiable, restricted, or unpublished sequencing data by email.
+
+## License
+
+Amplicon Analyzer is open-source software released under the [MIT License](LICENSE).
